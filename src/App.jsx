@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 const GEMINI_API_KEY = import.meta.env.GAK
-const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash'
+const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.0-flash'
 const STORAGE_KEY = 'gemmate_projects'
 
 const skillKeywords = [
@@ -844,6 +844,7 @@ async function callGemini(prompt) {
         ],
         generationConfig: {
           temperature: 0.35,
+          responseMimeType: 'application/json',
         },
       }),
     },
@@ -863,7 +864,7 @@ async function callGemini(prompt) {
   if (!text) throw new Error('Gemini 응답에서 텍스트를 찾지 못했습니다.')
 
   try {
-    return JSON.parse(extractJson(text))
+    return JSON.parse(text)
   } catch {
     throw new Error('Gemini가 JSON 형식이 아닌 응답을 반환했습니다. 다시 시도해 주세요.')
   }
@@ -991,19 +992,6 @@ function normalizeTasks(tasks) {
 function limitText(text, maxLength) {
   if (!text) return ''
   return text.length > maxLength ? `${text.slice(0, maxLength)}\n[내용이 길어 일부만 전달됨]` : text
-}
-
-function extractJson(text) {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fenced?.[1]) return fenced[1].trim()
-
-  const firstBrace = text.indexOf('{')
-  const lastBrace = text.lastIndexOf('}')
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    return text.slice(firstBrace, lastBrace + 1)
-  }
-
-  return text
 }
 
 export default App
