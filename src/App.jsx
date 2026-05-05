@@ -1,27 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 const GEMINI_API_KEY = import.meta.env.GAK
-const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash'
+const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.0-flash'
 const STORAGE_KEY = 'gemmate_projects'
 
 const skillKeywords = [
-  { key: 'data_scanner', label: '데이터 스캐너', category: '자료 조사' },
-  { key: 'number_cruncher', label: '넘버 크런처', category: '데이터 분석' },
-  { key: 'storyboarder', label: '스토리보더', category: '논리 설계' },
-  { key: 'visual_director', label: '비주얼 디렉터', category: '디자인' },
-  { key: 'copywriter', label: '카피라이터', category: '글쓰기' },
-  { key: 'presenter', label: '프레젠터', category: '발표' },
-  { key: 'pm', label: 'PM', category: '관리' },
-  { key: 'detail_checker', label: '디테일 검수자', category: '검수' },
+  { key: 'data_scanner', label: '데이터 스캐너', description: '자료, 공시, 기사에서 필요한 근거를 빠르게 찾습니다.' },
+  { key: 'number_cruncher', label: '넘버 크런처', description: '엑셀, 계산, 재무비율, 통계 분석에 강합니다.' },
+  { key: 'storyboarder', label: '스토리보더', description: '서론-본론-결론과 논리 흐름을 설계합니다.' },
+  { key: 'visual_director', label: '비주얼 디렉터', description: 'PPT 레이아웃, 그래프, 표 시각화에 강합니다.' },
+  { key: 'copywriter', label: '카피라이터', description: '분석 내용을 읽기 좋은 문장으로 다듬습니다.' },
+  { key: 'presenter', label: '프레젠터', description: '발표와 질의응답을 명확하게 수행합니다.' },
+  { key: 'pm', label: 'PM', description: '일정, 마감, 팀원 소통을 조율합니다.' },
+  { key: 'detail_checker', label: '디테일 검수자', description: '오타, 참고문헌, 제출 형식을 꼼꼼히 확인합니다.' },
 ]
 
 const makeId = () => `project_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-
-const emptyMember = (index) => ({
-  id: makeId(),
-  name: `팀원 ${index + 1}`,
-  skills: [],
-})
 
 const createEmptyForm = () => ({
   title: '',
@@ -30,7 +24,16 @@ const createEmptyForm = () => ({
   notice: '',
   rubric: '',
   fileSummary: '',
-  members: [emptyMember(0), emptyMember(1)],
+  memberCount: 2,
+})
+
+const createEmptyProfile = () => ({
+  name: '',
+  selectedSkills: [],
+  strengths: '',
+  weakness: '',
+  preferredRole: '',
+  availableTime: '',
 })
 
 function App() {
@@ -43,33 +46,79 @@ function App() {
   const [error, setError] = useState('')
 
   const activeProject = projects.find((project) => project.id === activeProjectId) || null
-  const canGenerate = useMemo(
+  const canCreate = useMemo(
     () => form.title.trim() && form.course.trim() && form.deadline.trim() && form.rubric.trim(),
     [form],
   )
+
+  useEffect(() => {
+    const syncFromHash = () => {
+      const route = parseHashRoute()
+      setScreen(route.screen)
+      setActiveProjectId(route.projectId)
+      setError('')
+    }
+
+    syncFromHash()
+    window.addEventListener('hashchange', syncFromHash)
+    return () => window.removeEventListener('hashchange', syncFromHash)
+  }, [])
+
+  const navigate = (nextScreen, projectId = null) => {
+    const nextHash = toHash(nextScreen, projectId)
+    if (window.location.hash === nextHash) {
+      setScreen(nextScreen)
+      setActiveProjectId(projectId)
+      setError('')
+      return
+    }
+    window.location.hash = nextHash
+  }
 
   const saveProjects = (nextProjects) => {
     setProjects(nextProjects)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextProjects))
   }
 
-  const updateForm = (field, value) => {
-    setForm((current) => ({ ...current, [field]: value }))
+  const updateProject = (projectId, patch) => {
+    const nextProjects = projects.map((project) =>
+      project.id === projectId ? { ...project, ...patch, updatedAt: new Date().toISOString() } : project,
+    )
+    saveProjects(nextProjects)
   }
 
-  const updateMember = (memberId, nextMember) => {
-    setForm((current) => ({
-      ...current,
-      members: current.members.map((member) => (member.id === memberId ? nextMember : member)),
-    }))
+  const resetForm = () => {
+    setForm(createEmptyForm())
+    setError('')
+    navigate('create')
   }
 
-  const setMemberCount = (count) => {
-    setForm((current) => {
-      const nextMembers = [...current.members]
-      while (nextMembers.length < count) nextMembers.push(emptyMember(nextMembers.length))
-      return { ...current, members: nextMembers.slice(0, count) }
-    })
+  const createProject = () => {
+    setError('')
+    if (!canCreate) {
+      setError('프로젝트명, 강의명, 종료 날짜, 평가기준은 필수 입력값입니다.')
+      return
+    }
+
+    const project = {
+      id: makeId(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      input: structuredClone(form),
+      selfProfile: null,
+      gemini: null,
+      progress: {
+        tasks: [],
+        minutes: [],
+        memberProgress: Array.from({ length: form.memberCount }, (_, index) => ({
+          label: `팀원 ${index + 1}`,
+          progress: 0,
+        })),
+      },
+    }
+
+    saveProjects([project, ...projects])
+    navigate('project', project.id)
   }
 
   const handleFiles = async (files) => {
@@ -81,60 +130,37 @@ function App() {
       const summaries = await Promise.all(
         Array.from(files).map(async (file) => {
           const textLike = /\.(txt|md|csv|json|html|css|js|jsx|ts|tsx)$/i.test(file.name)
-          if (!textLike) {
-            return `[${file.name}] 현재 프론트 구현에서는 이 파일의 본문을 읽지 않고 파일명만 Gemini에 전달합니다.`
-          }
-
+          if (!textLike) return `[${file.name}] 파일명만 전달됨`
           const text = await file.text()
-          return `[${file.name}]\n${text.slice(0, 6000)}`
+          return `[${file.name}]\n${text.slice(0, 3000)}`
         }),
       )
-
-      updateForm('fileSummary', summaries.join('\n\n'))
+      setForm((current) => ({ ...current, fileSummary: summaries.join('\n\n') }))
     } catch {
-      setError('파일을 읽는 중 문제가 생겼습니다. 텍스트 파일인지 확인해 주세요.')
+      setError('파일을 읽는 중 문제가 생겼습니다.')
     } finally {
       setIsReadingFiles(false)
     }
   }
 
-  const generatePlan = async () => {
+  const runAiDistribution = async (project, profile) => {
     setError('')
-
     if (!GEMINI_API_KEY) {
-      setError('GAK가 설정되어 있지 않습니다. Vercel 환경 변수 또는 로컬 .env.local에 Gemini API 키를 넣어주세요.')
-      return
-    }
-
-    if (!canGenerate) {
-      setError('프로젝트명, 강의명, 마감일, 평가기준은 필수 입력값입니다.')
+      setError('GAK가 설정되어 있지 않습니다. Vercel 환경 변수에 Gemini API 키를 넣고 재배포해 주세요.')
       return
     }
 
     setIsGenerating(true)
-
     try {
-      const gemini = await callGemini(buildProjectPrompt(form))
-      const project = {
-        id: makeId(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        input: structuredClone(form),
+      const gemini = await callGemini(buildDistributionPrompt(project, profile))
+      updateProject(project.id, {
+        selfProfile: profile,
         gemini,
         progress: {
+          ...project.progress,
           tasks: normalizeTasks(gemini.meeting_tasks),
-          minutes: [],
-          memberProgress: form.members.map((member) => ({
-            memberId: member.id,
-            name: member.name,
-            progress: 0,
-          })),
         },
-      }
-
-      saveProjects([project, ...projects])
-      setActiveProjectId(project.id)
-      setScreen('project')
+      })
     } catch (requestError) {
       setError(requestError.message || 'Gemini API 호출 중 문제가 생겼습니다.')
     } finally {
@@ -142,85 +168,55 @@ function App() {
     }
   }
 
-  const openProject = (projectId) => {
-    setActiveProjectId(projectId)
-    setScreen('project')
-  }
+  const openProject = (projectId) => navigate('project', projectId)
 
   const deleteProject = (projectId) => {
-    const nextProjects = projects.filter((project) => project.id !== projectId)
-    saveProjects(nextProjects)
-    if (activeProjectId === projectId) {
-      setActiveProjectId(null)
-      setScreen('dashboard')
-    }
-  }
-
-  const resetForm = () => {
-    setForm(createEmptyForm())
-    setError('')
-    setScreen('create')
+    saveProjects(projects.filter((project) => project.id !== projectId))
+    navigate('dashboard')
   }
 
   return (
-    <main className="min-h-screen bg-[#f7faff] text-[#111827]">
-      <Header screen={screen} setScreen={setScreen} projectCount={projects.length} />
-
-      {screen === 'landing' && <Landing onStart={resetForm} onDashboard={() => setScreen('dashboard')} projectCount={projects.length} />}
+    <main className="min-h-screen bg-[var(--color-bg-light)] text-[var(--color-black)]">
+      <Header navigate={navigate} />
+      {screen === 'landing' && <Landing onStart={resetForm} onDashboard={() => navigate('dashboard')} projectCount={projects.length} />}
       {screen === 'dashboard' && <Dashboard projects={projects} onCreate={resetForm} onOpen={openProject} onDelete={deleteProject} />}
       {screen === 'create' && (
         <ProjectCreate
           form={form}
-          updateForm={updateForm}
-          updateMember={updateMember}
-          setMemberCount={setMemberCount}
+          setForm={setForm}
           handleFiles={handleFiles}
           isReadingFiles={isReadingFiles}
-          isGenerating={isGenerating}
-          canGenerate={canGenerate}
+          canCreate={canCreate}
           error={error}
-          onGenerate={generatePlan}
+          onCreate={createProject}
         />
       )}
       {screen === 'project' && (
         <ProjectDetail
           project={activeProject}
-          onBack={() => setScreen('dashboard')}
+          error={error}
+          isGenerating={isGenerating}
+          onBack={() => navigate('dashboard')}
           onCreate={resetForm}
           onDelete={deleteProject}
+          onRunAi={runAiDistribution}
         />
       )}
     </main>
   )
 }
 
-function Header({ screen, setScreen, projectCount }) {
+function Header({ navigate }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-[#d9e3f8] bg-white/90 backdrop-blur-xl">
+    <header className="border-b border-[var(--color-secondary-light)] bg-[var(--color-bg-light)]">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-        <button type="button" onClick={() => setScreen('landing')} className="text-left">
-          <span className="block text-lg font-black tracking-tight text-[#003876]">Gemmate</span>
-          <span className="block text-xs font-medium text-[#5f6f8f]">Yonsei x Gemini Learning System</span>
+        <button type="button" onClick={() => navigate('landing')} className="text-left">
+          <span className="block text-lg font-semibold tracking-[-0.02em] text-[var(--color-primary)]">Gemmate</span>
+          <span className="block text-xs text-[var(--color-secondary)]">Yonsei x Gemini</span>
         </button>
-
-        <div className="flex items-center gap-2">
-          {screen !== 'landing' && (
-            <button
-              type="button"
-              onClick={() => setScreen('dashboard')}
-              className="rounded-full border border-[#9ab7e5] bg-white px-4 py-2 text-sm font-bold text-[#003876]"
-            >
-              대시보드 {projectCount > 0 ? projectCount : ''}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setScreen('create')}
-            className="rounded-full bg-[#003876] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#002b5c]"
-          >
-            프로젝트 생성
-          </button>
-        </div>
+        <span className="rounded-full border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] px-3 py-1 text-xs font-semibold text-[var(--color-secondary)]">
+          Local prototype
+        </span>
       </div>
     </header>
   )
@@ -229,61 +225,50 @@ function Header({ screen, setScreen, projectCount }) {
 function Landing({ onStart, onDashboard, projectCount }) {
   return (
     <>
-      <section className="relative overflow-hidden border-b border-[#d9e3f8] bg-[#eef5ff]">
-        <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,#003876,#4285F4,#34A853,#FBBC05,#EA4335)]" />
+      <section className="border-b border-[var(--color-secondary-light)]">
         <div className="mx-auto grid min-h-[calc(100vh-64px)] max-w-6xl gap-10 px-5 py-20 lg:grid-cols-[1fr_0.9fr] lg:items-center">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#003876]">Yonsei Social Sciences</p>
-            <h1 className="mt-5 max-w-3xl text-5xl font-black leading-[1.05] tracking-tight text-[#071526] sm:text-6xl">
-              팀 프로젝트를 공정하게 굴리는 Gemini 기반 학습 파트너
+            <Pill>Yonsei Social Sciences</Pill>
+            <h1 className="mt-6 max-w-3xl text-5xl font-normal leading-[1.08] tracking-[-0.04em] text-[var(--color-text-main)] sm:text-6xl">
+              팀 프로젝트를 데이터로 정리하고 Gemini로 역할을 나눕니다.
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-[#334155]">
-              Gemmate는 사용자가 입력한 공지사항, 평가기준, 파일 내용, 팀원 역량을 Gemini로 분석하고
-              생성 결과를 브라우저 localStorage에 저장합니다.
+            <p className="mt-6 max-w-2xl text-base leading-8 text-[var(--color-text-secondary)]">
+              Gemmate는 프로젝트 정보와 본인의 역량을 바탕으로 역할 분배, 마일스톤, 회의 후 할 일을 생성합니다.
+              결과는 현재 브라우저의 localStorage에 저장됩니다.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={onStart}
-                className="rounded-full bg-[#003876] px-6 py-3 text-base font-bold text-white shadow-[0_12px_30px_rgba(0,56,118,0.2)] transition hover:bg-[#002b5c]"
-              >
-                프로젝트 생성 시작
-              </button>
-              <button
-                type="button"
-                onClick={onDashboard}
-                className="rounded-full border border-[#9ab7e5] bg-white px-6 py-3 text-base font-bold text-[#003876] transition hover:border-[#4285F4]"
-              >
-                저장된 프로젝트 보기 {projectCount > 0 ? `(${projectCount})` : ''}
-              </button>
+              <PrimaryButton onClick={onStart}>프로젝트 만들기</PrimaryButton>
+              <SecondaryButton onClick={onDashboard}>저장된 프로젝트 {projectCount > 0 ? `(${projectCount})` : ''}</SecondaryButton>
             </div>
           </div>
-
-          <div className="rounded-[28px] border border-[#c8d9f3] bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
-            <div className="rounded-3xl bg-[#003876] p-6 text-white">
-              <p className="text-sm font-semibold text-[#bcd5ff]">Local-first workflow</p>
-              <h2 className="mt-3 text-3xl font-black">DB 없이 프로젝트 저장</h2>
-              <div className="mt-8 space-y-3">
-                {['입력 데이터 수집', 'Gemini 계획 생성', 'localStorage 저장', '대시보드에서 재열람'].map((item, index) => (
-                  <div key={item} className="flex items-center gap-3 rounded-2xl bg-white/10 p-4">
-                    <span className={['bg-[#4285F4]', 'bg-[#34A853]', 'bg-[#FBBC05]', 'bg-[#EA4335]'][index] + ' h-3 w-3 rounded-full'} />
-                    <span className="font-semibold">{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <AgentPanel />
         </div>
       </section>
 
       <section className="px-5 py-16">
-        <div className="mx-auto grid max-w-6xl gap-5 md:grid-cols-3">
-          <InfoCard title="1. 자료 입력" text="공지사항, 평가기준, 마감일, 파일 텍스트를 프로젝트 맥락으로 전달합니다." />
-          <InfoCard title="2. Gemini 생성" text="상황별 프롬프트로 방향성, 역할 분배, 마일스톤, 회의 후 할 일을 생성합니다." />
-          <InfoCard title="3. 로컬 저장" text="생성된 프로젝트는 현재 브라우저 localStorage에 저장되어 새로고침 후에도 유지됩니다." />
+        <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-3">
+          <InfoCard title="1. 최소 정보로 생성" text="프로젝트 생성 시에는 팀원 수와 과제 정보만 입력합니다." />
+          <InfoCard title="2. 내 역량은 상세에서" text="프로젝트에 들어가서 본인의 역량 정보가 없을 때 한 번만 입력합니다." />
+          <InfoCard title="3. AI로 분배" text="내 정보를 기준으로 나머지 팀원 역량은 Gemini가 합리적으로 가정합니다." />
         </div>
       </section>
     </>
+  )
+}
+
+function AgentPanel() {
+  return (
+    <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)]">
+      <div className="border-b border-[var(--color-secondary-light)] px-5 py-4">
+        <p className="text-sm font-semibold text-[var(--color-primary)]">Gemmate agent timeline</p>
+      </div>
+      <div className="grid gap-3 p-5">
+        <TimelineRow tone="blue" label="READ" text="평가기준과 공지사항을 읽습니다." />
+        <TimelineRow tone="green" label="MATCH" text="내 역량과 팀원 수를 바탕으로 역할을 추론합니다." />
+        <TimelineRow tone="yellow" label="PLAN" text="마감일부터 역산한 마일스톤을 구성합니다." />
+        <TimelineRow tone="red" label="DONE" text="대시보드에 저장 가능한 프로젝트 계획을 반환합니다." />
+      </div>
+    </div>
   )
 }
 
@@ -291,40 +276,28 @@ function Dashboard({ projects, onCreate, onOpen, onDelete }) {
   return (
     <section className="px-5 py-12">
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#003876]">Dashboard</p>
-            <h1 className="mt-4 text-4xl font-black tracking-tight text-[#071526]">저장된 프로젝트</h1>
-            <p className="mt-3 text-[#64748b]">이 브라우저에 저장된 프로젝트만 표시됩니다.</p>
-          </div>
-          <button type="button" onClick={onCreate} className="rounded-full bg-[#003876] px-5 py-3 font-bold text-white">
-            새 프로젝트
-          </button>
-        </div>
-
+        <PageHead eyebrow="Dashboard" title="저장된 프로젝트" description="이 브라우저의 localStorage에 저장된 프로젝트만 표시됩니다." />
         {projects.length === 0 ? (
-          <div className="mt-10 rounded-3xl border border-dashed border-[#9ab7e5] bg-white p-10 text-center">
-            <h2 className="text-2xl font-black text-[#003876]">아직 저장된 프로젝트가 없습니다</h2>
-            <p className="mt-3 text-[#64748b]">프로젝트 정보를 입력하고 Gemini 계획을 생성하면 여기에 저장됩니다.</p>
-            <button type="button" onClick={onCreate} className="mt-6 rounded-full bg-[#003876] px-5 py-3 font-bold text-white">
-              첫 프로젝트 만들기
-            </button>
-          </div>
+          <EmptyState onCreate={onCreate} />
         ) : (
-          <div className="mt-10 grid gap-5 lg:grid-cols-2">
+          <div className="mt-10 grid gap-4 lg:grid-cols-2">
             {projects.map((project) => (
-              <article key={project.id} className="rounded-3xl border border-[#d9e3f8] bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
-                <p className="text-sm font-bold text-[#4285F4]">{project.input.course}</p>
-                <h2 className="mt-2 text-2xl font-black text-[#071526]">{project.input.title}</h2>
-                <p className="mt-3 text-sm leading-6 text-[#64748b]">마감: {project.input.deadline}</p>
-                <p className="mt-4 line-clamp-2 text-sm leading-6 text-[#334155]">{project.gemini.direction?.one_line || '생성된 방향성이 없습니다.'}</p>
-                <div className="mt-6 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => onOpen(project.id)} className="rounded-full bg-[#003876] px-4 py-2 text-sm font-bold text-white">
-                    열기
-                  </button>
-                  <button type="button" onClick={() => onDelete(project.id)} className="rounded-full border border-[#f4b4aa] px-4 py-2 text-sm font-bold text-[#b42318]">
-                    삭제
-                  </button>
+              <article key={project.id} className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm text-[var(--color-secondary)]">{project.input.course}</p>
+                    <h2 className="mt-2 text-2xl font-normal tracking-[-0.025em] text-[var(--color-text-main)]">{project.input.title}</h2>
+                  </div>
+                  <Pill>{project.gemini ? 'AI 완료' : '입력 대기'}</Pill>
+                </div>
+                <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                  <MiniStat label="팀원 수" value={`${project.input.memberCount}명`} />
+                  <MiniStat label="마감" value={project.input.deadline} />
+                  <MiniStat label="내 역량" value={project.selfProfile ? '입력됨' : '필요'} />
+                </div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <PrimaryButton onClick={() => onOpen(project.id)}>프로젝트 열기</PrimaryButton>
+                  <SecondaryButton onClick={() => onDelete(project.id)}>삭제</SecondaryButton>
                 </div>
               </article>
             ))}
@@ -335,253 +308,445 @@ function Dashboard({ projects, onCreate, onOpen, onDelete }) {
   )
 }
 
-function ProjectCreate({
-  form,
-  updateForm,
-  updateMember,
-  setMemberCount,
-  handleFiles,
-  isReadingFiles,
-  isGenerating,
-  canGenerate,
-  error,
-  onGenerate,
-}) {
+function EmptyState({ onCreate }) {
+  return (
+    <div className="mt-10 rounded-xl border border-dashed border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-10 text-center">
+      <h2 className="text-2xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">아직 프로젝트가 없습니다</h2>
+      <p className="mt-3 text-[var(--color-text-secondary)]">프로젝트 정보를 입력하면 이곳에 저장됩니다.</p>
+      <div className="mt-6">
+        <PrimaryButton onClick={onCreate}>첫 프로젝트 만들기</PrimaryButton>
+      </div>
+    </div>
+  )
+}
+
+function ProjectCreate({ form, setForm, handleFiles, isReadingFiles, canCreate, error, onCreate }) {
+  const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }))
+
   return (
     <section className="px-5 py-12">
       <div className="mx-auto max-w-6xl">
-        <div className="max-w-3xl">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#003876]">Create Project</p>
-          <h1 className="mt-4 text-4xl font-black tracking-tight text-[#071526] sm:text-5xl">프로젝트 정보를 입력하세요</h1>
-          <p className="mt-4 text-base leading-7 text-[#475569]">
-            Gemini 생성 결과는 프로젝트 데이터로 합쳐져 localStorage에 저장됩니다.
-          </p>
-        </div>
-
-        <div className="mt-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <Panel title="기본 정보">
+        <PageHead
+          eyebrow="Create Project"
+          title="프로젝트 기본 정보를 입력하세요"
+          description="팀원별 역량은 아직 받지 않습니다. 프로젝트 상세에서 본인의 역량만 한 번 입력합니다."
+        />
+        <div className="mt-8 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+          <Panel title="과제 정보">
             <div className="grid gap-4">
               <TextInput label="프로젝트명" value={form.title} onChange={(value) => updateForm('title', value)} placeholder="예: 회계원리 가치투자 분석 과제" />
               <TextInput label="강의명" value={form.course} onChange={(value) => updateForm('course', value)} placeholder="예: 회계원리" />
-              <TextInput label="마감일" value={form.deadline} onChange={(value) => updateForm('deadline', value)} placeholder="예: 2026년 6월 7일 자정" />
-              <TextArea label="공지사항" value={form.notice} onChange={(value) => updateForm('notice', value)} placeholder="교수님 공지, 제출 방식, 제한 사항을 붙여 넣으세요." />
-              <TextArea label="평가기준" value={form.rubric} onChange={(value) => updateForm('rubric', value)} placeholder="배점, 페이지 제한, 필수 포함 요소를 붙여 넣으세요." />
+              <DeadlineSelect value={form.deadline} onChange={(value) => updateForm('deadline', value)} />
+              <label className="block">
+                <span className="text-sm font-semibold text-[var(--color-dark-gray)]">팀원 수</span>
+                <input
+                  type="range"
+                  min="2"
+                  max="8"
+                  value={form.memberCount}
+                  onChange={(event) => updateForm('memberCount', Number(event.target.value))}
+                  className="mt-4 w-full accent-[var(--color-primary)]"
+                />
+                <span className="mt-2 block text-sm font-semibold text-[var(--color-primary)]">{form.memberCount}명</span>
+              </label>
             </div>
           </Panel>
 
-          <div className="space-y-6">
-            <Panel title="파일 업로드">
-              <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-[#9ab7e5] bg-[#f7faff] p-6 text-center transition hover:border-[#4285F4]">
-                <span className="text-base font-bold text-[#003876]">{isReadingFiles ? '파일을 읽는 중...' : '파일 선택'}</span>
-                <span className="mt-2 text-sm leading-6 text-[#64748b]">
-                  txt, md, csv, json 등 텍스트 파일은 본문을 읽고 PDF/DOCX/PPTX는 파일명만 전달합니다.
-                </span>
+          <Panel title="프로젝트 자료">
+            <div className="grid gap-4">
+              <TextArea label="공지사항" value={form.notice} onChange={(value) => updateForm('notice', value)} placeholder="교수님 공지, 제출 방식, 제한 사항을 붙여 넣으세요." />
+              <TextArea label="평가기준" value={form.rubric} onChange={(value) => updateForm('rubric', value)} placeholder="배점, 페이지 제한, 필수 포함 요소를 붙여 넣으세요." />
+              <label className="rounded-lg border border-dashed border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+                <span className="block text-sm font-semibold text-[var(--color-primary)]">{isReadingFiles ? '파일을 읽는 중...' : '파일 선택'}</span>
+                <span className="mt-1 block text-sm leading-6 text-[var(--color-text-secondary)]">텍스트 파일은 본문을 읽고, 그 외 파일은 파일명만 저장합니다.</span>
                 <input type="file" multiple className="sr-only" onChange={(event) => handleFiles(event.target.files)} />
               </label>
               {form.fileSummary && (
                 <textarea
                   value={form.fileSummary}
                   onChange={(event) => updateForm('fileSummary', event.target.value)}
-                  className="mt-4 h-40 w-full resize-none rounded-3xl border border-[#d9e3f8] bg-white p-4 text-sm leading-6 outline-none focus:border-[#4285F4]"
+                  className="h-32 w-full resize-none rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-3 text-sm leading-6 outline-none focus:border-[var(--color-primary)]"
                 />
               )}
-            </Panel>
-
-            <Panel title="팀원 역량">
-              <label className="block">
-                <span className="text-sm font-bold text-[#1e293b]">팀원 인원수</span>
-                <input
-                  type="range"
-                  min="2"
-                  max="8"
-                  value={form.members.length}
-                  onChange={(event) => setMemberCount(Number(event.target.value))}
-                  className="mt-4 w-full accent-[#003876]"
-                />
-                <span className="mt-2 block text-sm font-bold text-[#003876]">{form.members.length}명</span>
-              </label>
-
-              <div className="mt-5 space-y-5">
-                {form.members.map((member) => (
-                  <MemberEditor key={member.id} member={member} updateMember={updateMember} />
-                ))}
-              </div>
-            </Panel>
-          </div>
+            </div>
+          </Panel>
         </div>
-
-        {error && <div className="mt-6 rounded-3xl border border-[#f4b4aa] bg-[#fff4f2] p-4 text-sm font-semibold text-[#9a3412]">{error}</div>}
-
-        <div className="mt-8 flex flex-col gap-3 rounded-3xl border border-[#d9e3f8] bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-black text-[#071526]">Gemini로 프로젝트 계획 생성 및 저장</p>
-            <p className="mt-1 text-sm text-[#64748b]">필수값: 프로젝트명, 강의명, 마감일, 평가기준</p>
-          </div>
-          <button
-            type="button"
-            disabled={!canGenerate || isGenerating}
-            onClick={onGenerate}
-            className="rounded-full bg-[#003876] px-6 py-3 text-base font-bold text-white transition hover:bg-[#002b5c] disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {isGenerating ? 'Gemini 분석 중...' : '생성하고 저장'}
-          </button>
+        {error && <ErrorBox>{error}</ErrorBox>}
+        <div className="mt-6 flex items-center justify-between rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
+          <p className="text-sm text-[var(--color-text-secondary)]">프로젝트를 만든 뒤 상세 페이지에서 AI 분배를 실행합니다.</p>
+          <PrimaryButton disabled={!canCreate} onClick={onCreate}>프로젝트 생성</PrimaryButton>
         </div>
       </div>
     </section>
   )
 }
 
-function MemberEditor({ member, updateMember }) {
-  return (
-    <div className="rounded-3xl border border-[#d9e3f8] bg-[#f7faff] p-4">
-      <TextInput label="이름" value={member.name} onChange={(value) => updateMember(member.id, { ...member, name: value })} />
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {skillKeywords.map((skill) => {
-          const active = member.skills.includes(skill.label)
-          return (
-            <button
-              key={skill.key}
-              type="button"
-              onClick={() =>
-                updateMember(member.id, {
-                  ...member,
-                  skills: active ? member.skills.filter((item) => item !== skill.label) : [...member.skills, skill.label],
-                })
-              }
-              className={`rounded-2xl border p-3 text-left transition ${
-                active ? 'border-[#4285F4] bg-white shadow-[0_8px_24px_rgba(66,133,244,0.12)]' : 'border-[#d9e3f8] bg-white/65 hover:bg-white'
-              }`}
-            >
-              <span className="block text-xs font-bold text-[#003876]">{skill.category}</span>
-              <span className="mt-1 block text-sm font-black text-[#111827]">{skill.label}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+function ProjectDetail({ project, error, isGenerating, onBack, onCreate, onDelete, onRunAi }) {
+  const [profileDraft, setProfileDraft] = useState(() => project?.selfProfile || createEmptyProfile())
+  const [showProfile, setShowProfile] = useState(false)
 
-function ProjectDetail({ project, onBack, onCreate, onDelete }) {
   if (!project) {
     return (
       <section className="px-5 py-16">
-        <div className="mx-auto max-w-3xl rounded-3xl border border-[#d9e3f8] bg-white p-10 text-center">
-          <h1 className="text-2xl font-black text-[#003876]">프로젝트를 찾을 수 없습니다</h1>
-          <button type="button" onClick={onBack} className="mt-6 rounded-full bg-[#003876] px-5 py-3 font-bold text-white">
-            대시보드로 이동
-          </button>
+        <div className="mx-auto max-w-3xl rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-10 text-center">
+          <h1 className="text-2xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">프로젝트를 찾을 수 없습니다</h1>
+          <div className="mt-6">
+            <PrimaryButton onClick={onBack}>대시보드로 이동</PrimaryButton>
+          </div>
         </div>
       </section>
     )
   }
 
+  const handleAiClick = () => {
+    if (!project.selfProfile) {
+      setShowProfile(true)
+      return
+    }
+    onRunAi(project, project.selfProfile)
+  }
+
+  const saveProfileAndRun = () => {
+    onRunAi(project, profileDraft)
+    setShowProfile(false)
+  }
+
   return (
     <section className="px-5 py-12">
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div className="flex flex-col justify-between gap-4 border-b border-[var(--color-secondary-light)] pb-6 lg:flex-row lg:items-end">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#003876]">{project.input.course}</p>
-            <h1 className="mt-4 text-4xl font-black tracking-tight text-[#071526]">{project.input.title}</h1>
-            <p className="mt-3 text-[#64748b]">마감: {project.input.deadline}</p>
+            <Pill>{project.input.course}</Pill>
+            <h1 className="mt-4 text-4xl font-normal leading-tight tracking-[-0.04em] text-[var(--color-text-main)]">{project.input.title}</h1>
+            <p className="mt-3 text-[var(--color-text-secondary)]">마감: {project.input.deadline} · 팀원 {project.input.memberCount}명</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={onBack} className="rounded-full border border-[#9ab7e5] bg-white px-5 py-3 font-bold text-[#003876]">
-              대시보드
-            </button>
-            <button type="button" onClick={onCreate} className="rounded-full bg-[#003876] px-5 py-3 font-bold text-white">
-              새 프로젝트
-            </button>
-            <button type="button" onClick={() => onDelete(project.id)} className="rounded-full border border-[#f4b4aa] px-5 py-3 font-bold text-[#b42318]">
-              삭제
-            </button>
+            <SecondaryButton onClick={onBack}>대시보드</SecondaryButton>
+            <SecondaryButton onClick={onCreate}>새 프로젝트</SecondaryButton>
+            <PrimaryButton disabled={isGenerating} onClick={handleAiClick}>{isGenerating ? '분배 중...' : 'AI로 분배하기'}</PrimaryButton>
+            <DangerButton onClick={() => onDelete(project.id)}>삭제</DangerButton>
           </div>
         </div>
-
-        <ResultSections result={project.gemini} />
-
-        <section className="mt-6 rounded-3xl border border-[#d9e3f8] bg-white p-6">
-          <h2 className="text-2xl font-black text-[#071526]">저장된 입력 정보</h2>
-          <pre className="mt-4 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-slate-100">{JSON.stringify(project.input, null, 2)}</pre>
+        {error && <ErrorBox>{error}</ErrorBox>}
+        {showProfile && (
+          <ProfilePanel
+            profile={profileDraft}
+            setProfile={setProfileDraft}
+            onCancel={() => setShowProfile(false)}
+            onSubmit={saveProfileAndRun}
+          />
+        )}
+        {!project.gemini ? (
+          <PreAiState hasProfile={Boolean(project.selfProfile)} onOpenProfile={() => setShowProfile(true)} onRun={handleAiClick} />
+        ) : (
+          <ResultSections result={project.gemini} />
+        )}
+        <section className="mt-6 rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)]">
+          <div className="border-b border-[var(--color-secondary-light)] px-5 py-4">
+            <h2 className="text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">프로젝트 입력 정보</h2>
+          </div>
+          <div className="grid gap-4 p-5 md:grid-cols-2">
+            <ReadOnlyBlock title="공지사항" text={project.input.notice || '입력 없음'} />
+            <ReadOnlyBlock title="평가기준" text={project.input.rubric || '입력 없음'} />
+          </div>
         </section>
       </div>
     </section>
   )
 }
 
-function ResultSections({ result }) {
-  return (
-    <div className="mt-8 grid gap-6">
-      <ResultCard title="프로젝트 방향성" content={result.direction} accent="blue" />
-      <ResultCard title="역할 분배" content={result.roles} />
-      <ResultCard title="마일스톤" content={result.milestones} />
-      <ResultCard title="회의 후 할 일" content={result.meeting_tasks} />
-      <ResultCard title="AI 조언" content={result.advice} accent="green" />
-      {result.warnings?.length > 0 && <ResultCard title="입력 보완 필요" content={result.warnings} accent="red" />}
-    </div>
-  )
-}
-
-function ResultCard({ title, content, accent = 'default' }) {
-  const accentClass =
-    accent === 'blue'
-      ? 'border-l-[#4285F4]'
-      : accent === 'green'
-        ? 'border-l-[#34A853]'
-        : accent === 'red'
-          ? 'border-l-[#EA4335]'
-          : 'border-l-[#003876]'
+function ProfilePanel({ profile, setProfile, onCancel, onSubmit }) {
+  const update = (field, value) => setProfile((current) => ({ ...current, [field]: value }))
+  const toggleSkill = (skill) => {
+    setProfile((current) => ({
+      ...current,
+      selectedSkills: current.selectedSkills.includes(skill)
+        ? current.selectedSkills.filter((item) => item !== skill)
+        : [...current.selectedSkills, skill],
+    }))
+  }
+  const canSubmit = profile.name.trim() && (profile.selectedSkills.length > 0 || profile.strengths.trim())
 
   return (
-    <section className={`rounded-3xl border border-[#d9e3f8] border-l-8 ${accentClass} bg-white p-6`}>
-      <h2 className="text-2xl font-black text-[#071526]">{title}</h2>
-      {Array.isArray(content) ? (
-        <div className="mt-5 grid gap-3 md:grid-cols-2">
-          {content.map((item, index) => (
-            <div key={index} className="rounded-2xl bg-[#f7faff] p-4">
-              {typeof item === 'string' ? <p className="leading-7 text-[#334155]">{item}</p> : <ObjectView data={item} />}
-            </div>
-          ))}
+    <section className="mt-6 rounded-xl border border-[var(--color-primary)] bg-[var(--color-bg-white)]">
+      <div className="border-b border-[var(--color-secondary-light)] px-5 py-4">
+        <Pill>1회 입력</Pill>
+        <h2 className="mt-3 text-2xl font-normal tracking-[-0.03em] text-[var(--color-text-main)]">본인의 역량을 입력해 주세요</h2>
+        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">선택 카드와 자유 입력을 함께 사용하면 AI가 더 안정적으로 역할을 나눕니다.</p>
+      </div>
+      <div className="grid gap-5 p-5">
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextInput label="이름" value={profile.name} onChange={(value) => update('name', value)} placeholder="예: 민서" />
+          <TextInput label="선호 역할" value={profile.preferredRole} onChange={(value) => update('preferredRole', value)} placeholder="예: 자료조사, 발표, 일정관리" />
         </div>
-      ) : typeof content === 'object' && content !== null ? (
-        <div className="mt-5 rounded-2xl bg-[#f7faff] p-4">
-          <ObjectView data={content} />
+        <div>
+          <p className="text-sm font-semibold text-[var(--color-dark-gray)]">역량 키워드 선택</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {skillKeywords.map((skill) => {
+              const active = profile.selectedSkills.includes(skill.label)
+              return (
+                <button
+                  key={skill.key}
+                  type="button"
+                  onClick={() => toggleSkill(skill.label)}
+                  className={`rounded-lg border p-3 text-left ${
+                    active
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]'
+                      : 'border-[var(--color-secondary-light)] bg-[var(--color-bg-light)]'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold text-[var(--color-text-main)]">{skill.label}</span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--color-text-secondary)]">{skill.description}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
-      ) : (
-        <p className="mt-4 whitespace-pre-wrap leading-8 text-[#334155]">{content || '생성된 내용이 없습니다.'}</p>
-      )}
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextArea label="추가 강점" value={profile.strengths} onChange={(value) => update('strengths', value)} placeholder="예: 엑셀 계산, 자료조사, 논리 구조화가 가능합니다." />
+          <TextArea label="부족한 부분 또는 피하고 싶은 업무" value={profile.weakness} onChange={(value) => update('weakness', value)} placeholder="예: 디자인은 자신 없고 발표는 가능하면 피하고 싶습니다." />
+          <TextInput label="가능한 작업 시간" value={profile.availableTime} onChange={(value) => update('availableTime', value)} placeholder="예: 평일 저녁, 주말 오후" />
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 border-t border-[var(--color-secondary-light)] p-5">
+        <SecondaryButton onClick={onCancel}>취소</SecondaryButton>
+        <PrimaryButton disabled={!canSubmit} onClick={onSubmit}>저장 후 AI 분배</PrimaryButton>
+      </div>
     </section>
   )
 }
 
-function ObjectView({ data }) {
+function PreAiState({ hasProfile, onOpenProfile, onRun }) {
   return (
-    <dl className="space-y-3">
-      {Object.entries(data).map(([key, value]) => (
-        <div key={key}>
-          <dt className="text-xs font-black uppercase tracking-[0.12em] text-[#003876]">{key}</dt>
-          <dd className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#334155]">
-            {Array.isArray(value) ? value.join('\n') : typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : value}
-          </dd>
+    <section className="mt-6 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+        <Pill>Next action</Pill>
+        <h2 className="mt-4 text-2xl font-normal tracking-[-0.03em] text-[var(--color-text-main)]">
+          {hasProfile ? 'AI 분배를 실행할 준비가 됐습니다.' : '먼저 본인의 역량을 입력해야 합니다.'}
+        </h2>
+        <p className="mt-3 leading-7 text-[var(--color-text-secondary)]">
+          Gemini는 본인의 역량을 기준점으로 삼고, 다른 팀원의 역량은 팀원 수와 과제 조건에 맞게 임의 추정해서 역할을 나눕니다.
+        </p>
+        <div className="mt-5 flex gap-2">
+          <SecondaryButton onClick={onOpenProfile}>역량 입력</SecondaryButton>
+          <PrimaryButton onClick={onRun}>AI로 분배하기</PrimaryButton>
         </div>
+      </div>
+      <AgentPanel />
+    </section>
+  )
+}
+
+function ResultSections({ result }) {
+  return (
+    <div className="mt-6 grid gap-5">
+      <DirectionCard direction={result.direction} />
+      <RolesGrid roles={result.roles} />
+      <MilestoneTimeline milestones={result.milestones} />
+      <TaskGrid tasks={result.meeting_tasks} />
+      <AdviceGrid advice={result.advice} warnings={result.warnings} />
+    </div>
+  )
+}
+
+function DirectionCard({ direction }) {
+  return (
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+      <Pill>Direction</Pill>
+      <h2 className="mt-4 text-3xl font-normal leading-tight tracking-[-0.04em] text-[var(--color-text-main)]">{direction?.one_line}</h2>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <ReadOnlyBlock title="전략" text={direction?.strategy || '생성된 전략이 없습니다.'} />
+        <ReadOnlyBlock title="피해야 할 실수" text={direction?.avoid || '생성된 내용이 없습니다.'} tone="yellow" />
+      </div>
+    </section>
+  )
+}
+
+function RolesGrid({ roles = [] }) {
+  return (
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+      <SectionTitle eyebrow="R&R" title="역할 분배" />
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {roles.map((role, index) => (
+          <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+            <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
+            <h3 className="mt-2 text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{role.role_title}</h3>
+            <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{role.reason}</p>
+            <ul className="mt-4 grid gap-2">
+              {(role.responsibilities || []).map((item) => (
+                <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-dark-gray)]">{item}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function MilestoneTimeline({ milestones = [] }) {
+  return (
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+      <SectionTitle eyebrow="Timeline" title="마일스톤" />
+      <div className="mt-6 grid gap-4">
+        {milestones.map((milestone, index) => (
+          <div key={`${milestone.phase}-${index}`} className="grid gap-3 md:grid-cols-[120px_1fr]">
+            <div className="flex md:block">
+              <div className="rounded-full bg-[var(--color-primary)] px-3 py-1 text-center text-xs font-semibold text-white">{milestone.phase}</div>
+            </div>
+            <div className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+              <div className="flex flex-col justify-between gap-2 sm:flex-row">
+                <h3 className="text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{milestone.goal}</h3>
+                <span className="rounded-full bg-[var(--color-light-blue)] px-3 py-1 text-xs font-semibold text-[var(--color-primary)]">{milestone.deadline}</span>
+              </div>
+              <div className="mt-4 grid gap-2 md:grid-cols-2">
+                {(milestone.checkpoints || []).map((checkpoint) => (
+                  <div key={checkpoint} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+                    {checkpoint}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function TaskGrid({ tasks = [] }) {
+  return (
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+      <SectionTitle eyebrow="After meeting" title="회의 후 할 일" />
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {tasks.map((task, index) => (
+          <div key={`${task.task}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+            <p className="text-sm font-semibold text-[var(--color-primary)]">{task.owner} · {task.due}</p>
+            <h3 className="mt-2 text-lg font-semibold text-[var(--color-black)]">{task.task}</h3>
+            <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{task.reason}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function AdviceGrid({ advice = [], warnings = [] }) {
+  return (
+    <section className="grid gap-4 lg:grid-cols-2">
+      <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+        <SectionTitle eyebrow="Advice" title="AI 조언" />
+        <ListItems items={advice} tone="green" />
+      </div>
+      <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+        <SectionTitle eyebrow="Risk" title="보완 필요" />
+        <ListItems items={warnings?.length ? warnings : ['현재 Gemini가 감지한 주요 누락 정보는 없습니다.']} tone="yellow" />
+      </div>
+    </section>
+  )
+}
+
+function ListItems({ items = [], tone = 'blue' }) {
+  const color = tone === 'green' ? 'var(--color-light-green)' : tone === 'yellow' ? 'var(--color-light-yellow)' : 'var(--color-light-blue)'
+  return (
+    <ul className="mt-4 grid gap-2">
+      {items.map((item) => (
+        <li key={item} style={{ backgroundColor: color }} className="rounded-md px-3 py-2 text-sm leading-6 text-[var(--color-dark-gray)]">
+          {item}
+        </li>
       ))}
-    </dl>
+    </ul>
+  )
+}
+
+function DeadlineSelect({ value, onChange }) {
+  const options = useMemo(() => buildDeadlineOptions(120), [])
+  return (
+    <label className="block">
+      <span className="text-sm font-semibold text-[var(--color-dark-gray)]">종료 날짜</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 h-11 w-full rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] px-3 text-[var(--color-black)] outline-none focus:border-[var(--color-primary)]"
+      >
+        <option value="">종료 날짜를 선택하세요</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.label}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function PageHead({ eyebrow, title, description }) {
+  return (
+    <div className="max-w-3xl">
+      <Pill>{eyebrow}</Pill>
+      <h1 className="mt-4 text-4xl font-normal tracking-[-0.04em] text-[var(--color-text-main)] sm:text-5xl">{title}</h1>
+      <p className="mt-4 text-base leading-7 text-[var(--color-text-secondary)]">{description}</p>
+    </div>
+  )
+}
+
+function SectionTitle({ eyebrow, title }) {
+  return (
+    <div>
+      <Pill>{eyebrow}</Pill>
+      <h2 className="mt-3 text-2xl font-normal tracking-[-0.03em] text-[var(--color-text-main)]">{title}</h2>
+    </div>
+  )
+}
+
+function TimelineRow({ tone, label, text }) {
+  const tones = {
+    blue: 'bg-[var(--color-light-blue)]',
+    green: 'bg-[var(--color-light-green)]',
+    yellow: 'bg-[var(--color-light-yellow)]',
+    red: 'bg-[var(--color-light-red)]',
+  }
+
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-3">
+      <span className={`${tones[tone]} rounded-full px-2 py-1 text-[11px] font-semibold tracking-[0.08em] text-[var(--color-text-main)]`}>{label}</span>
+      <p className="text-sm leading-6 text-[var(--color-text-secondary)]">{text}</p>
+    </div>
+  )
+}
+
+function MiniStat({ label, value }) {
+  return (
+    <div className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-3">
+      <p className="text-xs text-[var(--color-gray)]">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-[var(--color-text-main)]">{value}</p>
+    </div>
+  )
+}
+
+function ReadOnlyBlock({ title, text, tone = 'blue' }) {
+  const bg = tone === 'yellow' ? 'var(--color-light-yellow)' : 'var(--color-bg-light)'
+  return (
+    <div style={{ backgroundColor: bg }} className="rounded-lg border border-[var(--color-secondary-light)] p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">{title}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[var(--color-text-secondary)]">{text}</p>
+    </div>
   )
 }
 
 function InfoCard({ title, text }) {
   return (
-    <div className="rounded-3xl border border-[#d9e3f8] bg-white p-6">
-      <h2 className="text-xl font-black text-[#003876]">{title}</h2>
-      <p className="mt-3 leading-7 text-[#475569]">{text}</p>
+    <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+      <h2 className="text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{title}</h2>
+      <p className="mt-3 text-sm leading-7 text-[var(--color-text-secondary)]">{text}</p>
     </div>
   )
 }
 
 function Panel({ title, children }) {
   return (
-    <section className="rounded-3xl border border-[#d9e3f8] bg-white p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
-      <h2 className="text-xl font-black text-[#003876]">{title}</h2>
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+      <h2 className="text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{title}</h2>
       <div className="mt-5">{children}</div>
     </section>
   )
@@ -590,12 +755,12 @@ function Panel({ title, children }) {
 function TextInput({ label, value, onChange, placeholder = '' }) {
   return (
     <label className="block">
-      <span className="text-sm font-bold text-[#1e293b]">{label}</span>
+      <span className="text-sm font-semibold text-[var(--color-dark-gray)]">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="mt-2 h-12 w-full rounded-2xl border border-[#d9e3f8] bg-white px-4 outline-none transition placeholder:text-slate-400 focus:border-[#4285F4] focus:ring-4 focus:ring-[#4285F4]/10"
+        className="mt-2 h-11 w-full rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] px-3 text-[var(--color-black)] outline-none placeholder:text-[var(--color-light-gray)] focus:border-[var(--color-primary)]"
       />
     </label>
   )
@@ -604,16 +769,61 @@ function TextInput({ label, value, onChange, placeholder = '' }) {
 function TextArea({ label, value, onChange, placeholder }) {
   return (
     <label className="block">
-      <span className="text-sm font-bold text-[#1e293b]">{label}</span>
+      <span className="text-sm font-semibold text-[var(--color-dark-gray)]">{label}</span>
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        rows={6}
-        className="mt-2 w-full resize-none rounded-3xl border border-[#d9e3f8] bg-white p-4 leading-7 outline-none transition placeholder:text-slate-400 focus:border-[#4285F4] focus:ring-4 focus:ring-[#4285F4]/10"
+        rows={5}
+        className="mt-2 w-full resize-none rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-3 leading-7 text-[var(--color-black)] outline-none placeholder:text-[var(--color-light-gray)] focus:border-[var(--color-primary)]"
       />
     </label>
   )
+}
+
+function Pill({ children }) {
+  return (
+    <span className="inline-flex rounded-full bg-[var(--color-primary-light)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">
+      {children}
+    </span>
+  )
+}
+
+function PrimaryButton({ children, onClick, disabled = false }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-[var(--color-light-gray)]"
+    >
+      {children}
+    </button>
+  )
+}
+
+function SecondaryButton({ children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text-main)]"
+    >
+      {children}
+    </button>
+  )
+}
+
+function DangerButton({ children, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="rounded-lg bg-[var(--color-light-red)] px-4 py-2.5 text-sm font-semibold text-[var(--color-black)]">
+      {children}
+    </button>
+  )
+}
+
+function ErrorBox({ children }) {
+  return <div className="mt-6 rounded-lg border border-[var(--color-light-red)] bg-[var(--color-light-red)] p-4 text-sm font-semibold text-[var(--color-black)]">{children}</div>
 }
 
 async function callGemini(prompt) {
@@ -640,6 +850,10 @@ async function callGemini(prompt) {
     },
   )
 
+  if (response.status === 503) {
+    throw new Error('Gemini 모델 수요가 높아 일시적으로 응답하지 못했습니다. 모델을 낮추거나 잠시 후 다시 시도해 주세요.')
+  }
+
   if (!response.ok) {
     const detail = await response.text()
     throw new Error(`Gemini API 오류 ${response.status}: ${detail}`)
@@ -647,48 +861,43 @@ async function callGemini(prompt) {
 
   const data = await response.json()
   const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text).join('\n')
-
   if (!text) throw new Error('Gemini 응답에서 텍스트를 찾지 못했습니다.')
 
   try {
     return JSON.parse(text)
   } catch {
-    throw new Error('Gemini가 JSON 형식이 아닌 응답을 반환했습니다. 다시 생성해 주세요.')
+    throw new Error('Gemini가 JSON 형식이 아닌 응답을 반환했습니다. 다시 시도해 주세요.')
   }
 }
 
-function buildProjectPrompt(form) {
-  const members = form.members
-    .map((member) => `- ${member.name}: ${member.skills.length ? member.skills.join(', ') : '선택 키워드 없음'}`)
-    .join('\n')
-
+function buildDistributionPrompt(project, profile) {
   return `
-너는 연세대학교 사회과학대학 학생들의 팀 프로젝트를 돕는 Gemini 기반 AI 팀메이트 "Gemmate"다.
-사용자가 입력한 실제 프로젝트 데이터만 근거로 삼아야 하며, 없는 파일 내용이나 팀원 데이터를 임의로 지어내지 마라.
+너는 연세대학교 사회과학대학 학생들의 팀 프로젝트를 돕는 AI 팀메이트 Gemmate다.
+아래 프로젝트 정보와 "본인"의 역량 정보는 실제 입력값이다.
+다른 팀원의 역량은 아직 입력되지 않았으므로, 프로젝트 성격과 팀원 수를 바탕으로 합리적으로 가정하되 가정임을 reason 또는 warnings에 명시하라.
 
-목표:
-1. 평가기준에 맞춘 프로젝트 진행 방향성을 정한다.
-2. 팀원 역량 키워드에 맞춰 역할과 책임을 배분한다.
-3. 마감일부터 역산한 마일스톤을 만든다.
-4. 첫 회의 후 바로 실행할 할 일을 추천한다.
-5. 누락된 정보가 있으면 warnings에 명시한다.
-
-프로젝트 정보:
-- 프로젝트명: ${form.title}
-- 강의명: ${form.course}
-- 마감일: ${form.deadline}
+프로젝트:
+- 프로젝트명: ${limitText(project.input.title, 200)}
+- 강의명: ${limitText(project.input.course, 120)}
+- 마감일: ${project.input.deadline}
+- 팀원 수: ${project.input.memberCount}
 
 공지사항:
-${form.notice || '입력 없음'}
+${limitText(project.input.notice || '입력 없음', 1600)}
 
 평가기준:
-${form.rubric}
+${limitText(project.input.rubric, 2200)}
 
-업로드 파일에서 읽은 내용 또는 파일명:
-${form.fileSummary || '입력 없음'}
+업로드 파일 내용 또는 파일명:
+${limitText(project.input.fileSummary || '입력 없음', 2200)}
 
-팀원 역량 키워드:
-${members}
+본인 역량:
+- 이름: ${profile.name}
+- 선택 키워드: ${profile.selectedSkills?.length ? profile.selectedSkills.join(', ') : '선택 없음'}
+- 추가 강점: ${profile.strengths || '입력 없음'}
+- 부족한 부분: ${profile.weakness || '입력 없음'}
+- 선호 역할: ${profile.preferredRole || '입력 없음'}
+- 가능한 작업 시간: ${profile.availableTime || '입력 없음'}
 
 반드시 아래 JSON 스키마로만 답하라. 마크다운 코드블록은 쓰지 마라.
 {
@@ -699,15 +908,15 @@ ${members}
   },
   "roles": [
     {
-      "member": "팀원 이름",
+      "member": "팀원 이름 또는 팀원 번호",
       "role_title": "역할명",
-      "reason": "선택한 역량 키워드에 근거한 배정 이유",
+      "reason": "본인 입력 또는 가정한 역량에 근거한 배정 이유",
       "responsibilities": ["구체 업무 1", "구체 업무 2"]
     }
   ],
   "milestones": [
     {
-      "phase": "Phase 이름",
+      "phase": "Phase 1",
       "deadline": "권장 완료일",
       "goal": "목표",
       "checkpoints": ["점검 기준 1", "점검 기준 2"]
@@ -727,6 +936,41 @@ ${members}
 `
 }
 
+function parseHashRoute() {
+  const raw = window.location.hash.replace(/^#\/?/, '')
+  const [screen, projectId] = raw.split('/')
+  if (screen === 'dashboard') return { screen: 'dashboard', projectId: null }
+  if (screen === 'create') return { screen: 'create', projectId: null }
+  if (screen === 'project' && projectId) return { screen: 'project', projectId }
+  return { screen: 'landing', projectId: null }
+}
+
+function toHash(screen, projectId = null) {
+  if (screen === 'dashboard') return '#/dashboard'
+  if (screen === 'create') return '#/create'
+  if (screen === 'project' && projectId) return `#/project/${projectId}`
+  return '#/'
+}
+
+function buildDeadlineOptions(days) {
+  const formatter = new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+  })
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(today)
+    date.setDate(today.getDate() + index)
+    return {
+      value: date.toISOString().slice(0, 10),
+      label: formatter.format(date),
+    }
+  })
+}
+
 function loadProjects() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -743,6 +987,11 @@ function normalizeTasks(tasks) {
     id: makeId(),
     done: false,
   }))
+}
+
+function limitText(text, maxLength) {
+  if (!text) return ''
+  return text.length > maxLength ? `${text.slice(0, maxLength)}\n[내용이 길어 일부만 전달됨]` : text
 }
 
 export default App
