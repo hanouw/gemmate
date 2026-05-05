@@ -474,15 +474,6 @@ function ProjectDetail({ project, error, isGenerating, onBack, onCreate, onDelet
         ) : (
           <ResultSections result={project.gemini} />
         )}
-        <section className="mt-6 rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)]">
-          <div className="border-b border-[var(--color-secondary-light)] px-5 py-4">
-            <h2 className="text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">프로젝트 입력 정보</h2>
-          </div>
-          <div className="grid gap-4 p-5 md:grid-cols-2">
-            <ReadOnlyBlock title="공지사항" text={project.input.notice || '입력 없음'} />
-            <ReadOnlyBlock title="평가기준" text={project.input.rubric || '입력 없음'} />
-          </div>
-        </section>
       </div>
     </section>
   )
@@ -572,31 +563,31 @@ function PreAiState({ hasProfile, onOpenProfile, onRun }) {
 
 function ResultSections({ result }) {
   return (
-    <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="grid gap-5">
-        <DirectionCard direction={result.direction} advice={result.advice} warnings={result.warnings} />
+        <RolesGrid roles={result.roles} />
         <GanttChart milestones={result.milestones} />
         <MeetingMinutesBoard />
       </div>
-      <RolesGrid roles={result.roles} />
+      <DirectionCard direction={result.direction} advice={result.advice} warnings={result.warnings} />
     </div>
   )
 }
 
 function DirectionCard({ direction, advice = [], warnings = [] }) {
   return (
-    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5 xl:sticky xl:top-5 xl:self-start">
+      <div className="grid gap-4">
         <div>
           <Pill>Direction</Pill>
           <h2 className="mt-4 text-3xl font-normal leading-tight tracking-[-0.04em] text-[var(--color-text-main)]">{direction?.one_line}</h2>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <InsightPopover type="advice" title="AI 조언" items={advice} />
-          <InsightPopover type="warning" title="보완 필요" items={warnings?.length ? warnings : ['현재 Gemini가 감지한 주요 누락 정보는 없습니다.']} />
+          <InsightPopover type="warning" title="보완점" items={warnings?.length ? warnings : ['현재 Gemini가 감지한 주요 누락 정보는 없습니다.']} />
         </div>
       </div>
-      <div className="mt-5 grid gap-3 lg:grid-cols-2">
+      <div className="mt-5 grid gap-3">
         <ReadOnlyBlock title="전략" text={direction?.strategy || '생성된 전략이 없습니다.'} />
         <ReadOnlyBlock title="피해야 할 실수" text={direction?.avoid || '생성된 내용이 없습니다.'} tone="yellow" />
       </div>
@@ -606,9 +597,9 @@ function DirectionCard({ direction, advice = [], warnings = [] }) {
 
 function RolesGrid({ roles = [] }) {
   return (
-    <aside className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5 xl:sticky xl:top-5 xl:self-start">
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
       <SectionTitle eyebrow="R&R" title="역할 분배" />
-      <div className="mt-5 grid gap-3">
+      <div className="mt-5 grid gap-3 lg:grid-cols-2">
         {roles.map((role, index) => (
           <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
             <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
@@ -622,7 +613,7 @@ function RolesGrid({ roles = [] }) {
           </div>
         ))}
       </div>
-    </aside>
+    </section>
   )
 }
 
@@ -640,7 +631,10 @@ function ListItems({ items = [], tone = 'blue' }) {
 }
 
 function GanttChart({ milestones = [] }) {
-  const normalized = normalizeMilestonesForGantt(milestones)
+  const normalized = assignMilestoneStatuses(normalizeMilestonesForGantt(milestones))
+  const currentIndex = normalized.findIndex((milestone) => milestone.status === '진행 중')
+  const [activeIndex, setActiveIndex] = useState(currentIndex >= 0 ? currentIndex : 0)
+  const activeMilestone = normalized[activeIndex] || normalized[0]
   const totalDays = Math.max(
     1,
     Math.ceil((normalized[normalized.length - 1]?.end - normalized[0]?.start) / 86400000) + 1,
@@ -668,37 +662,76 @@ function GanttChart({ milestones = [] }) {
               const duration = Math.max(1, Math.ceil((milestone.end - milestone.start) / 86400000) + 1)
               const left = (startOffset / totalDays) * 100
               const width = Math.min(100 - left, Math.max(8, (duration / totalDays) * 100))
+              const tone = getMilestoneTone(milestone.status)
+              const isActive = activeIndex === index
 
               return (
-                <div key={`${milestone.phase}-${index}`} className="grid grid-cols-[180px_1fr] items-center gap-3">
+                <button
+                  key={`${milestone.phase}-${index}`}
+                  type="button"
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onFocus={() => setActiveIndex(index)}
+                  onClick={() => setActiveIndex(index)}
+                  className={`grid grid-cols-[180px_1fr] items-center gap-3 rounded-lg p-1 text-left transition ${
+                    isActive ? 'bg-[var(--color-primary-light)]' : 'hover:bg-[var(--color-bg-light)]'
+                  }`}
+                >
                   <div>
-                    <p className="text-sm font-semibold text-[var(--color-text-main)]">{milestone.phase}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-[var(--color-text-main)]">{milestone.phase}: {milestone.goal}</p>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                        style={{ backgroundColor: tone.badgeBg, color: tone.badgeText }}
+                      >
+                        {milestone.status}
+                      </span>
+                    </div>
                     <p className="mt-1 text-xs text-[var(--color-gray)]">{milestone.deadline}</p>
                   </div>
                   <div className="relative h-14 rounded-lg bg-[var(--color-bg-light)]">
                     <div
-                      className="absolute top-2 h-10 rounded-lg bg-[var(--color-primary)] px-3 py-2 text-xs font-semibold text-white"
-                      style={{ left: `${left}%`, width: `${width}%` }}
+                      className="absolute top-2 h-10 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm"
+                      style={{ left: `${left}%`, width: `${width}%`, backgroundColor: tone.bar, color: tone.barText }}
                     >
-                      <span className="line-clamp-1">{milestone.goal}</span>
+                      <span className="line-clamp-1">{milestone.phase}</span>
                     </div>
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
-          <div className="mt-5 grid gap-2 md:grid-cols-2">
-            {milestones.map((milestone, index) => (
-              <ReadOnlyBlock
-                key={`${milestone.phase}-check-${index}`}
-                title={milestone.phase}
-                text={(milestone.checkpoints || milestone.tasks || []).join('\n') || milestone.goal}
-              />
-            ))}
-          </div>
+          {activeMilestone && (
+            <MilestoneDetail milestone={activeMilestone} />
+          )}
         </div>
       </div>
     </section>
+  )
+}
+
+function MilestoneDetail({ milestone }) {
+  const tone = getMilestoneTone(milestone.status)
+  const checkpoints = milestone.checkpoints || milestone.tasks || []
+
+  return (
+    <div className="mt-5 rounded-lg border p-4" style={{ borderColor: tone.border, backgroundColor: tone.detailBg }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--color-text-main)]">
+          {milestone.phase}: {milestone.goal}
+        </h3>
+        <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: tone.badgeBg, color: tone.badgeText }}>
+          {milestone.status}
+        </span>
+      </div>
+      <p className="mt-2 text-sm font-semibold text-[var(--color-primary)]">마감 {milestone.deadline}</p>
+      <ul className="mt-4 grid gap-2 md:grid-cols-2">
+        {(checkpoints.length ? checkpoints : [milestone.goal]).map((item) => (
+          <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm leading-6 text-[var(--color-dark-gray)]">
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -743,16 +776,20 @@ function InsightPopover({ type, title, items = [] }) {
     <>
       <button
         type="button"
-        onMouseEnter={() => setOpen(true)}
-        onFocus={() => setOpen(true)}
         onClick={() => setOpen(true)}
-        className={`inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${
+        className={`inline-flex h-11 min-w-[132px] items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-4 text-sm font-semibold ${
           isWarning
             ? 'border-[var(--color-light-yellow)] bg-[var(--color-light-yellow)] text-[var(--color-black)]'
             : 'border-[var(--color-light-green)] bg-[var(--color-light-green)] text-[var(--color-black)]'
         }`}
       >
-        <span>{isWarning ? '!' : '💬'}</span>
+        {isWarning ? (
+          <span className="grid h-5 w-5 place-items-center bg-[var(--color-primary)] text-[10px] font-bold text-white [clip-path:polygon(50%_0,100%_100%,0_100%)]">
+            <span className="translate-y-[2px]">!</span>
+          </span>
+        ) : (
+          <span className="relative h-5 w-5 rounded-full bg-[var(--color-primary)] after:absolute after:bottom-[-2px] after:left-1 after:h-2 after:w-2 after:rotate-45 after:bg-[var(--color-primary)]" />
+        )}
         {title}
       </button>
       {open && (
@@ -1125,6 +1162,57 @@ function normalizeMilestonesForGantt(milestones = []) {
   })
 
   return parsed.sort((a, b) => a.start - b.start)
+}
+
+function assignMilestoneStatuses(milestones = []) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const withStatus = milestones.map((milestone) => {
+    if (milestone.end < today) return { ...milestone, status: '완료' }
+    if (milestone.start <= today && milestone.end >= today) return { ...milestone, status: '진행 중' }
+    return { ...milestone, status: '예정' }
+  })
+
+  if (!withStatus.some((milestone) => milestone.status === '진행 중')) {
+    const nextIndex = withStatus.findIndex((milestone) => milestone.status !== '완료')
+    if (nextIndex >= 0) {
+      return withStatus.map((milestone, index) => (index === nextIndex ? { ...milestone, status: '진행 중' } : milestone))
+    }
+  }
+
+  return withStatus
+}
+
+function getMilestoneTone(status) {
+  const tones = {
+    완료: {
+      bar: 'var(--color-light-green)',
+      barText: 'var(--color-black)',
+      badgeBg: 'var(--color-light-green)',
+      badgeText: 'var(--color-black)',
+      border: '#9bbf91',
+      detailBg: '#f4faf2',
+    },
+    '진행 중': {
+      bar: 'var(--color-primary)',
+      barText: '#ffffff',
+      badgeBg: 'var(--color-primary)',
+      badgeText: '#ffffff',
+      border: 'var(--color-primary)',
+      detailBg: 'var(--color-primary-light)',
+    },
+    예정: {
+      bar: 'var(--color-secondary-light)',
+      barText: 'var(--color-text-main)',
+      badgeBg: 'var(--color-secondary-light)',
+      badgeText: 'var(--color-text-main)',
+      border: 'var(--color-secondary-light)',
+      detailBg: 'var(--color-bg-light)',
+    },
+  }
+
+  return tones[status] || tones.예정
 }
 
 function parseLooseDate(value) {
