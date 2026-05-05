@@ -15,6 +15,39 @@ const skillKeywords = [
   { key: 'detail_checker', label: '디테일 검수자', description: '오타, 참고문헌, 제출 형식을 꼼꼼히 확인합니다.' },
 ]
 
+const sampleMeetings = [
+  {
+    date: '2026.05.08',
+    title: '킥오프 회의',
+    summary: '평가기준 확인과 역할 분배 방향 논의',
+    body: `참석자: 팀원 전체
+
+1. 평가기준을 먼저 읽고 높은 배점 영역에 시간을 집중하기로 했습니다.
+2. 자료 조사와 분석 결과가 발표 자료로 바로 이어지도록 산출물 형식을 통일하기로 했습니다.
+3. 다음 회의 전까지 각자 맡을 수 있는 역량과 가능한 시간을 정리해 오기로 했습니다.`,
+  },
+  {
+    date: '2026.05.15',
+    title: '중간 점검',
+    summary: '자료 수집 현황과 마일스톤 조정',
+    body: `참석자: 팀원 전체
+
+1. 수집된 자료의 출처와 신뢰도를 다시 확인했습니다.
+2. 마감일 기준으로 분석 단계가 늦어질 위험이 있어 시각화 작업을 병행하기로 했습니다.
+3. Gemini가 제안한 체크포인트를 기준으로 다음 주까지 1차 산출물을 만들기로 했습니다.`,
+  },
+  {
+    date: '2026.05.22',
+    title: '최종 구조 회의',
+    summary: '발표 흐름과 최종 검수 항목 확정',
+    body: `참석자: 팀원 전체
+
+1. 발표 흐름은 문제 정의, 분석 근거, 결론 순서로 확정했습니다.
+2. 참고문헌, 표기 통일, 파일 형식 검수를 별도 체크리스트로 관리하기로 했습니다.
+3. 마지막 회의에서는 발표 리허설과 예상 질문 대응만 진행하기로 했습니다.`,
+  },
+]
+
 const makeId = () => `project_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
 const createEmptyForm = () => ({
@@ -539,22 +572,31 @@ function PreAiState({ hasProfile, onOpenProfile, onRun }) {
 
 function ResultSections({ result }) {
   return (
-    <div className="mt-6 grid gap-5">
-      <DirectionCard direction={result.direction} />
+    <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-5">
+        <DirectionCard direction={result.direction} advice={result.advice} warnings={result.warnings} />
+        <GanttChart milestones={result.milestones} />
+        <MeetingMinutesBoard />
+      </div>
       <RolesGrid roles={result.roles} />
-      <MilestoneTimeline milestones={result.milestones} />
-      <TaskGrid tasks={result.meeting_tasks} />
-      <AdviceGrid advice={result.advice} warnings={result.warnings} />
     </div>
   )
 }
 
-function DirectionCard({ direction }) {
+function DirectionCard({ direction, advice = [], warnings = [] }) {
   return (
     <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
-      <Pill>Direction</Pill>
-      <h2 className="mt-4 text-3xl font-normal leading-tight tracking-[-0.04em] text-[var(--color-text-main)]">{direction?.one_line}</h2>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+        <div>
+          <Pill>Direction</Pill>
+          <h2 className="mt-4 text-3xl font-normal leading-tight tracking-[-0.04em] text-[var(--color-text-main)]">{direction?.one_line}</h2>
+        </div>
+        <div className="flex gap-2">
+          <InsightPopover type="advice" title="AI 조언" items={advice} />
+          <InsightPopover type="warning" title="보완 필요" items={warnings?.length ? warnings : ['현재 Gemini가 감지한 주요 누락 정보는 없습니다.']} />
+        </div>
+      </div>
+      <div className="mt-5 grid gap-3 lg:grid-cols-2">
         <ReadOnlyBlock title="전략" text={direction?.strategy || '생성된 전략이 없습니다.'} />
         <ReadOnlyBlock title="피해야 할 실수" text={direction?.avoid || '생성된 내용이 없습니다.'} tone="yellow" />
       </div>
@@ -564,9 +606,9 @@ function DirectionCard({ direction }) {
 
 function RolesGrid({ roles = [] }) {
   return (
-    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+    <aside className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5 xl:sticky xl:top-5 xl:self-start">
       <SectionTitle eyebrow="R&R" title="역할 분배" />
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
+      <div className="mt-5 grid gap-3">
         {roles.map((role, index) => (
           <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
             <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
@@ -580,69 +622,7 @@ function RolesGrid({ roles = [] }) {
           </div>
         ))}
       </div>
-    </section>
-  )
-}
-
-function MilestoneTimeline({ milestones = [] }) {
-  return (
-    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
-      <SectionTitle eyebrow="Timeline" title="마일스톤" />
-      <div className="mt-6 grid gap-4">
-        {milestones.map((milestone, index) => (
-          <div key={`${milestone.phase}-${index}`} className="grid gap-3 md:grid-cols-[120px_1fr]">
-            <div className="flex md:block">
-              <div className="rounded-full bg-[var(--color-primary)] px-3 py-1 text-center text-xs font-semibold text-white">{milestone.phase}</div>
-            </div>
-            <div className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
-              <div className="flex flex-col justify-between gap-2 sm:flex-row">
-                <h3 className="text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{milestone.goal}</h3>
-                <span className="rounded-full bg-[var(--color-light-blue)] px-3 py-1 text-xs font-semibold text-[var(--color-primary)]">{milestone.deadline}</span>
-              </div>
-              <div className="mt-4 grid gap-2 md:grid-cols-2">
-                {(milestone.checkpoints || []).map((checkpoint) => (
-                  <div key={checkpoint} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-                    {checkpoint}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function TaskGrid({ tasks = [] }) {
-  return (
-    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
-      <SectionTitle eyebrow="After meeting" title="회의 후 할 일" />
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        {tasks.map((task, index) => (
-          <div key={`${task.task}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
-            <p className="text-sm font-semibold text-[var(--color-primary)]">{task.owner} · {task.due}</p>
-            <h3 className="mt-2 text-lg font-semibold text-[var(--color-black)]">{task.task}</h3>
-            <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{task.reason}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function AdviceGrid({ advice = [], warnings = [] }) {
-  return (
-    <section className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
-        <SectionTitle eyebrow="Advice" title="AI 조언" />
-        <ListItems items={advice} tone="green" />
-      </div>
-      <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
-        <SectionTitle eyebrow="Risk" title="보완 필요" />
-        <ListItems items={warnings?.length ? warnings : ['현재 Gemini가 감지한 주요 누락 정보는 없습니다.']} tone="yellow" />
-      </div>
-    </section>
+    </aside>
   )
 }
 
@@ -656,6 +636,150 @@ function ListItems({ items = [], tone = 'blue' }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+function GanttChart({ milestones = [] }) {
+  const normalized = normalizeMilestonesForGantt(milestones)
+  const totalDays = Math.max(
+    1,
+    Math.ceil((normalized[normalized.length - 1]?.end - normalized[0]?.start) / 86400000) + 1,
+  )
+
+  return (
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+        <SectionTitle eyebrow="Gantt" title="마일스톤 흐름" />
+        <p className="text-sm text-[var(--color-text-secondary)]">날짜와 연계된 전체 진행 흐름</p>
+      </div>
+      <div className="mt-6 overflow-x-auto">
+        <div className="min-w-[720px]">
+          <div className="grid grid-cols-[180px_1fr] border-b border-[var(--color-secondary-light)] pb-3 text-xs font-semibold text-[var(--color-gray)]">
+            <span>Phase</span>
+            <div className="grid grid-cols-4">
+              {buildGanttTicks(normalized[0]?.start, normalized[normalized.length - 1]?.end).map((tick) => (
+                <span key={tick}>{tick}</span>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3">
+            {normalized.map((milestone, index) => {
+              const startOffset = Math.max(0, Math.floor((milestone.start - normalized[0].start) / 86400000))
+              const duration = Math.max(1, Math.ceil((milestone.end - milestone.start) / 86400000) + 1)
+              const left = (startOffset / totalDays) * 100
+              const width = Math.min(100 - left, Math.max(8, (duration / totalDays) * 100))
+
+              return (
+                <div key={`${milestone.phase}-${index}`} className="grid grid-cols-[180px_1fr] items-center gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--color-text-main)]">{milestone.phase}</p>
+                    <p className="mt-1 text-xs text-[var(--color-gray)]">{milestone.deadline}</p>
+                  </div>
+                  <div className="relative h-14 rounded-lg bg-[var(--color-bg-light)]">
+                    <div
+                      className="absolute top-2 h-10 rounded-lg bg-[var(--color-primary)] px-3 py-2 text-xs font-semibold text-white"
+                      style={{ left: `${left}%`, width: `${width}%` }}
+                    >
+                      <span className="line-clamp-1">{milestone.goal}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div className="mt-5 grid gap-2 md:grid-cols-2">
+            {milestones.map((milestone, index) => (
+              <ReadOnlyBlock
+                key={`${milestone.phase}-check-${index}`}
+                title={milestone.phase}
+                text={(milestone.checkpoints || milestone.tasks || []).join('\n') || milestone.goal}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function MeetingMinutesBoard() {
+  const [activeMeeting, setActiveMeeting] = useState(null)
+
+  return (
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+      <SectionTitle eyebrow="Example" title="회의록 목록" />
+      <p className="mt-3 text-sm text-[var(--color-text-secondary)]">예시입니다) AI 분배 후 보이는 고정 회의록입니다. 날짜를 클릭하면 내용을 볼 수 있습니다.</p>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        {sampleMeetings.map((meeting) => (
+          <button
+            key={meeting.date}
+            type="button"
+            onClick={() => setActiveMeeting(meeting)}
+            className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4 text-left"
+          >
+            <p className="text-sm font-semibold text-[var(--color-primary)]">{meeting.date}</p>
+            <p className="mt-2 text-lg font-semibold text-[var(--color-text-main)]">{meeting.title}</p>
+            <p className="mt-2 text-xs text-[var(--color-gray)]">{meeting.summary}</p>
+          </button>
+        ))}
+      </div>
+      {activeMeeting && (
+        <Modal title={`${activeMeeting.date} 회의록`} onClose={() => setActiveMeeting(null)}>
+          <p className="text-sm font-semibold text-[var(--color-primary)]">예시입니다)</p>
+          <div className="mt-4 whitespace-pre-wrap rounded-lg bg-[var(--color-bg-light)] p-4 text-sm leading-7 text-[var(--color-text-secondary)]">
+            {activeMeeting.body}
+          </div>
+        </Modal>
+      )}
+    </section>
+  )
+}
+
+function InsightPopover({ type, title, items = [] }) {
+  const [open, setOpen] = useState(false)
+  const isWarning = type === 'warning'
+
+  return (
+    <>
+      <button
+        type="button"
+        onMouseEnter={() => setOpen(true)}
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+        className={`inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${
+          isWarning
+            ? 'border-[var(--color-light-yellow)] bg-[var(--color-light-yellow)] text-[var(--color-black)]'
+            : 'border-[var(--color-light-green)] bg-[var(--color-light-green)] text-[var(--color-black)]'
+        }`}
+      >
+        <span>{isWarning ? '!' : '💬'}</span>
+        {title}
+      </button>
+      {open && (
+        <Modal title={title} onClose={() => setOpen(false)}>
+          <ListItems items={items} tone={isWarning ? 'yellow' : 'green'} />
+        </Modal>
+      )}
+    </>
+  )
+}
+
+function Modal({ title, children, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(0,35,78,0.36)] px-5" onMouseDown={onClose}>
+      <div
+        className="max-h-[82vh] w-full max-w-2xl overflow-auto rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-4 border-b border-[var(--color-secondary-light)] pb-4">
+          <h3 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--color-text-main)]">{title}</h3>
+          <button type="button" onClick={onClose} className="rounded-lg border border-[var(--color-secondary-light)] px-3 py-1 text-sm font-semibold text-[var(--color-text-main)]">
+            닫기
+          </button>
+        </div>
+        <div className="pt-4">{children}</div>
+      </div>
+    </div>
   )
 }
 
@@ -969,6 +1093,65 @@ function buildDeadlineOptions(days) {
       label: formatter.format(date),
     }
   })
+}
+
+function normalizeMilestonesForGantt(milestones = []) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  if (!milestones.length) {
+    return [
+      {
+        phase: 'Phase 1',
+        deadline: '일정 없음',
+        goal: '마일스톤을 생성해 주세요',
+        start: today,
+        end: today,
+      },
+    ]
+  }
+
+  const parsed = milestones.map((milestone, index) => {
+    const end = parseLooseDate(milestone.deadline) || addDays(today, (index + 1) * 7)
+    const start = index === 0 ? today : addDays(parseLooseDate(milestones[index - 1]?.deadline) || addDays(today, index * 7), 1)
+    return {
+      ...milestone,
+      phase: milestone.phase || `Phase ${index + 1}`,
+      goal: milestone.goal || milestone.title || '목표 없음',
+      deadline: milestone.deadline || formatShortDate(end),
+      start,
+      end: end < start ? start : end,
+    }
+  })
+
+  return parsed.sort((a, b) => a.start - b.start)
+}
+
+function parseLooseDate(value) {
+  if (!value) return null
+  const text = String(value)
+  const iso = text.match(/20\d{2}[-./]\d{1,2}[-./]\d{1,2}/)
+  if (!iso) return null
+
+  const [year, month, day] = iso[0].split(/[-./]/).map(Number)
+  const date = new Date(year, month - 1, day)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function buildGanttTicks(start, end) {
+  if (!start || !end) return []
+  const total = Math.max(1, end - start)
+  return [0, 0.33, 0.66, 1].map((ratio) => formatShortDate(new Date(start.getTime() + total * ratio)))
+}
+
+function formatShortDate(date) {
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
+function addDays(date, days) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
 }
 
 function loadProjects() {
