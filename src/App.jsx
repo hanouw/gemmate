@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 const GEMINI_API_KEY = import.meta.env.GAK
-const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.0-flash'
+const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash'
 const STORAGE_KEY = 'gemmate_projects'
 
 const skillKeywords = [
