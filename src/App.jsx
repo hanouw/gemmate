@@ -587,24 +587,66 @@ function PreAiState({ hasProfile, onOpenProfile, onRun }) {
 
 function ResultSections({ result, rolesDefaultOpen, onUpdateMilestone }) {
   return (
-    <div className="mt-6 grid gap-5">
-      <div className="grid gap-5 xl:grid-cols-2">
-        <RolesGrid roles={result.roles} defaultOpen={rolesDefaultOpen} />
-        <DirectionCard direction={result.direction} advice={result.advice} warnings={result.warnings} />
-      </div>
+    <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(300px,1fr)]">
       <CalendarMilestones milestones={result.milestones} roles={result.roles} onUpdateMilestone={onUpdateMilestone} />
-      <MeetingMinutesBoard />
+      <ProjectSidePanels
+        roles={result.roles}
+        direction={result.direction}
+        advice={result.advice}
+        warnings={result.warnings}
+        defaultOpen={rolesDefaultOpen ? 'roles' : null}
+      />
     </div>
+  )
+}
+
+function ProjectSidePanels({ roles = [], direction, advice = [], warnings = [], defaultOpen = null }) {
+  const [activePanel, setActivePanel] = useState(defaultOpen)
+
+  return (
+    <aside className="grid content-start gap-3 xl:sticky xl:top-5 xl:self-start">
+      <SidePanel id="roles" eyebrow="R&R" title="역할 분배" activePanel={activePanel} setActivePanel={setActivePanel}>
+        <RolesGrid roles={roles} />
+      </SidePanel>
+      <SidePanel id="direction" eyebrow="Direction" title="방향" activePanel={activePanel} setActivePanel={setActivePanel}>
+        <DirectionCard direction={direction} advice={advice} warnings={warnings} />
+      </SidePanel>
+      <SidePanel id="meetings" eyebrow="Example" title="회의목록" activePanel={activePanel} setActivePanel={setActivePanel}>
+        <MeetingMinutesBoard embedded />
+      </SidePanel>
+    </aside>
+  )
+}
+
+function SidePanel({ id, eyebrow, title, activePanel, setActivePanel, children }) {
+  const isOpen = activePanel === id
+
+  return (
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)]">
+      <button
+        type="button"
+        onClick={() => setActivePanel(isOpen ? null : id)}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+      >
+        <span>
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">{eyebrow}</span>
+          <span className="mt-1 block text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{title}</span>
+        </span>
+        <span className="rounded-lg border border-[var(--color-secondary-light)] px-2 py-1 text-xs font-semibold text-[var(--color-text-main)]">
+          {isOpen ? '접기' : '펼치기'}
+        </span>
+      </button>
+      {isOpen && <div className="border-t border-[var(--color-secondary-light)] p-5">{children}</div>}
+    </section>
   )
 }
 
 function DirectionCard({ direction, advice = [], warnings = [] }) {
   return (
-    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+    <div>
       <div className="grid gap-4">
         <div>
-          <Pill>Direction</Pill>
-          <h2 className="mt-4 text-3xl font-normal leading-tight tracking-[-0.04em] text-[var(--color-text-main)]">{direction?.one_line}</h2>
+          <h2 className="text-2xl font-normal leading-tight tracking-[-0.04em] text-[var(--color-text-main)]">{direction?.one_line}</h2>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <InsightPopover type="advice" title="AI 조언" items={advice} />
@@ -615,38 +657,28 @@ function DirectionCard({ direction, advice = [], warnings = [] }) {
         <ReadOnlyBlock title="전략" text={direction?.strategy || '생성된 전략이 없습니다.'} />
         <ReadOnlyBlock title="피해야 할 실수" text={direction?.avoid || '생성된 내용이 없습니다.'} tone="yellow" />
       </div>
-    </section>
+    </div>
   )
 }
 
-function RolesGrid({ roles = [], defaultOpen = false }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen)
-
+function RolesGrid({ roles = [] }) {
   return (
-    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <SectionTitle eyebrow="R&R" title="역할 분배" />
-        <SecondaryButton onClick={() => setIsOpen((current) => !current)}>{isOpen ? '접기' : '펼치기'}</SecondaryButton>
-      </div>
-      {isOpen && (
-        <div className="mt-5 max-h-[520px] overflow-y-auto pr-1">
-          <div className="grid gap-3">
-            {roles.map((role, index) => (
-              <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
-                <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
-                <h3 className="mt-2 text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{role.role_title}</h3>
-                <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{role.reason}</p>
-                <ul className="mt-4 grid gap-2">
-                  {(role.responsibilities || []).map((item) => (
-                    <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-dark-gray)]">{item}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+    <div className="max-h-[520px] overflow-y-auto pr-1">
+      <div className="grid gap-3">
+        {roles.map((role, index) => (
+          <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+            <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
+            <h3 className="mt-2 text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{role.role_title}</h3>
+            <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{role.reason}</p>
+            <ul className="mt-4 grid gap-2">
+              {(role.responsibilities || []).map((item) => (
+                <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-dark-gray)]">{item}</li>
+              ))}
+            </ul>
           </div>
-        </div>
-      )}
-    </section>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -754,7 +786,6 @@ function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) 
                             style={{ borderColor: tone.border, backgroundColor: tone.badgeBg, color: tone.badgeText }}
                           >
                             <span className="block whitespace-normal break-words">{milestone.phase}</span>
-                            <span className="block whitespace-normal break-words font-normal">{milestone.goal}</span>
                           </button>
                         )
                       })}
@@ -860,14 +891,16 @@ function MilestoneModal({ milestone, owner, onClose, onUpdate }) {
   )
 }
 
-function MeetingMinutesBoard() {
+function MeetingMinutesBoard({ embedded = false }) {
   const [activeMeeting, setActiveMeeting] = useState(null)
 
-  return (
-    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+  const content = (
+    <>
+      {!embedded && (
       <SectionTitle eyebrow="Example" title="회의록 목록" />
+      )}
       <p className="mt-3 text-sm text-[var(--color-text-secondary)]">예시입니다) AI 분배 후 보이는 고정 회의록입니다. 날짜를 클릭하면 내용을 볼 수 있습니다.</p>
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
+      <div className="mt-5 grid gap-3">
         {sampleMeetings.map((meeting) => (
           <button
             key={meeting.date}
@@ -889,6 +922,14 @@ function MeetingMinutesBoard() {
           </div>
         </Modal>
       )}
+    </>
+  )
+
+  if (embedded) return content
+
+  return (
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
+      {content}
     </section>
   )
 }
