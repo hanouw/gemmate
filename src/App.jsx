@@ -1388,24 +1388,10 @@ function normalizeMilestonesForCalendar(milestones = []) {
 }
 
 function assignMilestoneStatuses(milestones = []) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  const withStatus = milestones.map((milestone) => {
+  return milestones.map((milestone) => {
     if (['완료', '진행 중', '예정'].includes(milestone.status)) return milestone
-    if (milestone.end < today) return { ...milestone, status: '완료' }
-    if (milestone.start <= today && milestone.end >= today) return { ...milestone, status: '진행 중' }
     return { ...milestone, status: '예정' }
   })
-
-  if (!withStatus.some((milestone) => milestone.status === '진행 중')) {
-    const nextIndex = withStatus.findIndex((milestone) => milestone.status !== '완료')
-    if (nextIndex >= 0) {
-      return withStatus.map((milestone, index) => (index === nextIndex ? { ...milestone, status: '진행 중' } : milestone))
-    }
-  }
-
-  return withStatus
 }
 
 function getMilestoneTone(status) {
@@ -1489,7 +1475,8 @@ function getInitialCalendarMonthIndex(months = []) {
 
 function getRoleProgressSummary(role, roleIndex, roles = [], milestones = []) {
   const normalized = assignMilestoneStatuses(normalizeMilestonesForCalendar(milestones))
-  const assignedMilestones = normalized
+  const inProgressMilestones = normalized.filter((milestone) => milestone.status === '진행 중')
+  const assignedMilestones = inProgressMilestones
     .map((milestone) => {
       const checkpoints = getMilestoneCheckpoints(milestone)
       const assignedIndexes = checkpoints
@@ -1504,64 +1491,34 @@ function getRoleProgressSummary(role, roleIndex, roles = [], milestones = []) {
     return {
       progress: 0,
       urgent: false,
-      nearestLabel: role.role_title || '배정된 마일스톤 업무 없음',
+      nearestLabel: '진행 중 Phase 업무 없음',
     }
   }
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const nearest =
-    assignedMilestones.find(({ milestone, assignedIndexes }) => milestone.end >= today && !isAssignedWorkComplete(milestone, assignedIndexes)) ||
-    assignedMilestones.find(({ milestone }) => milestone.end >= today) ||
-    assignedMilestones[assignedMilestones.length - 1]
-  const progress = getAssignedProgress(nearest.milestone, nearest.assignedIndexes)
+  const totals = assignedMilestones.reduce(
+    (acc, { milestone, assignedIndexes }) => {
+      const total = assignedIndexes.length
+      const completed = assignedIndexes.filter(({ index }) => milestone.completedCheckpoints?.[index]).length
+      return {
+        total: acc.total + total,
+        completed: acc.completed + completed,
+      }
+    },
+    { total: 0, completed: 0 },
+  )
+  const progress = totals.total ? Math.round((totals.completed / totals.total) * 100) : 0
+  const nearest = assignedMilestones
+    .slice()
+    .sort((a, b) => a.milestone.end - b.milestone.end)[0]
   const daysLeft = Math.ceil((nearest.milestone.end - today) / 86400000)
-  const completionRatio = getAssignedCompletionRatio(nearest.milestone, nearest.assignedIndexes)
 
   return {
     progress,
-    urgent: daysLeft <= 3 && completionRatio === 0 && nearest.milestone.status !== '완료',
-    nearestLabel: `${nearest.milestone.phase} · ${nearest.milestone.deadline}`,
+    urgent: daysLeft <= 3 && totals.completed === 0,
+    nearestLabel: `${nearest.milestone.phase} · ${totals.completed}/${totals.total} 완료`,
   }
-}
-
-function getAssignedProgress(milestone, assignedIndexes = []) {
-  if (milestone.status === '완료') return 100
-  if (!assignedIndexes.length) return getDateBasedProgress(milestone)
-
-  const completionRatio = getAssignedCompletionRatio(milestone, assignedIndexes)
-  if (completionRatio >= 1) return 100
-
-  const dateProgress = getDateBasedProgress(milestone) / 100
-  const blended = completionRatio + (1 - completionRatio) * dateProgress
-  return Math.round(Math.min(99, blended * 100))
-}
-
-function isAssignedWorkComplete(milestone, assignedIndexes = []) {
-  if (milestone.status === '완료') return true
-  if (!assignedIndexes.length) return false
-  return assignedIndexes.every(({ index }) => milestone.completedCheckpoints?.[index])
-}
-
-function getAssignedCompletionRatio(milestone, assignedIndexes = []) {
-  if (milestone.status === '완료') return 1
-  if (!assignedIndexes.length) return 0
-
-  const completed = assignedIndexes.filter(({ index }) => milestone.completedCheckpoints?.[index]).length
-  return completed / assignedIndexes.length
-}
-
-function getDateBasedProgress(milestone) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  const start = milestone.start || today
-  const end = milestone.end || start
-  const total = Math.max(1, end - start)
-  const elapsed = today - start
-
-  if (elapsed <= 0) return 0
-  return Math.round(Math.min(99, Math.max(0, (elapsed / total) * 100)))
 }
 
 function getMilestoneCheckpoints(milestone) {
