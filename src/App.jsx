@@ -591,6 +591,7 @@ function ResultSections({ result, rolesDefaultOpen, onUpdateMilestone }) {
       <CalendarMilestones milestones={result.milestones} roles={result.roles} onUpdateMilestone={onUpdateMilestone} />
       <ProjectSidePanels
         roles={result.roles}
+        milestones={result.milestones}
         direction={result.direction}
         advice={result.advice}
         warnings={result.warnings}
@@ -600,13 +601,13 @@ function ResultSections({ result, rolesDefaultOpen, onUpdateMilestone }) {
   )
 }
 
-function ProjectSidePanels({ roles = [], direction, advice = [], warnings = [], defaultOpen = null }) {
+function ProjectSidePanels({ roles = [], milestones = [], direction, advice = [], warnings = [], defaultOpen = null }) {
   const [activePanel, setActivePanel] = useState(defaultOpen)
 
   return (
     <aside className="grid content-start gap-3 xl:sticky xl:top-5 xl:self-start">
       <SidePanel id="roles" eyebrow="R&R" title="역할 분배" activePanel={activePanel} setActivePanel={setActivePanel}>
-        <RolesGrid roles={roles} />
+        <RolesGrid roles={roles} milestones={milestones} />
       </SidePanel>
       <SidePanel id="direction" eyebrow="Direction" title="방향" activePanel={activePanel} setActivePanel={setActivePanel}>
         <DirectionCard direction={direction} advice={advice} warnings={warnings} />
@@ -661,24 +662,73 @@ function DirectionCard({ direction, advice = [], warnings = [] }) {
   )
 }
 
-function RolesGrid({ roles = [] }) {
+function RolesGrid({ roles = [], milestones = [] }) {
+  const [activeRoleIndex, setActiveRoleIndex] = useState(null)
+  const activeRole = roles[activeRoleIndex] || null
+
   return (
     <div className="max-h-[520px] overflow-y-auto pr-1">
       <div className="grid gap-3">
-        {roles.map((role, index) => (
-          <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
-            <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
-            <h3 className="mt-2 text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{role.role_title}</h3>
-            <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{role.reason}</p>
-            <ul className="mt-4 grid gap-2">
-              {(role.responsibilities || []).map((item) => (
-                <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-dark-gray)]">{item}</li>
-              ))}
-            </ul>
-          </div>
-        ))}
+        {roles.map((role, index) => {
+          const summary = getRoleProgressSummary(role, index, roles, milestones)
+
+          return (
+            <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-[var(--color-text-main)]">{role.member}</p>
+                    {summary.urgent && <span className="text-xs font-semibold text-red-600">마감임박!</span>}
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-[var(--color-gray)]">{summary.nearestLabel}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveRoleIndex(index)}
+                  className="rounded-md px-2 py-1 text-sm font-semibold text-[var(--color-primary)]"
+                  aria-label={`${role.member} 역할 상세 보기`}
+                >
+                  &gt;&gt;
+                </button>
+              </div>
+              <div className="mt-3">
+                <div className="flex items-center justify-between gap-3 text-xs font-semibold text-[var(--color-gray)]">
+                  <span>진척도</span>
+                  <span>{summary.progress}%</span>
+                </div>
+                <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-[var(--color-bg-white)]">
+                  <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${summary.progress}%` }} />
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
+      {activeRole && (
+        <RoleDetailModal role={activeRole} onClose={() => setActiveRoleIndex(null)} />
+      )}
     </div>
+  )
+}
+
+function RoleDetailModal({ role, onClose }) {
+  return (
+    <Modal title={`${role.member} 역할 상세`} onClose={onClose}>
+      <div className="grid gap-4">
+        <ReadOnlyBlock title="배정 역할" text={role.role_title || '역할 정보가 없습니다.'} />
+        <ReadOnlyBlock title="배정 이유" text={role.reason || '배정 이유가 없습니다.'} />
+        <div className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">담당 업무</p>
+          <ul className="mt-3 grid gap-2">
+            {(role.responsibilities || []).map((item) => (
+              <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm leading-6 text-[var(--color-dark-gray)]">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -801,7 +851,7 @@ function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) 
       {activeMilestone && (
         <MilestoneModal
           milestone={activeMilestone}
-          owner={getMilestoneOwner(activeMilestone, roles)}
+          roles={roles}
           onClose={() => setActiveMilestoneIndex(null)}
           onUpdate={(patch) => onUpdateMilestone(activeMilestone.originalIndex, patch)}
         />
@@ -810,9 +860,9 @@ function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) 
   )
 }
 
-function MilestoneModal({ milestone, owner, onClose, onUpdate }) {
+function MilestoneModal({ milestone, roles = [], onClose, onUpdate }) {
   const tone = getMilestoneTone(milestone.status)
-  const checkpoints = milestone.checkpoints || milestone.tasks || []
+  const checkpoints = getMilestoneCheckpoints(milestone)
   const completedCheckpoints = milestone.completedCheckpoints || {}
 
   const toggleCheckpoint = (index) => {
@@ -827,11 +877,7 @@ function MilestoneModal({ milestone, owner, onClose, onUpdate }) {
   return (
     <Modal title={`${milestone.phase}: ${milestone.goal}`} onClose={onClose}>
       <div className="grid gap-4">
-        <div className="grid gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4 md:grid-cols-3">
-          <div>
-            <p className="text-xs font-semibold text-[var(--color-gray)]">담당</p>
-            <p className="mt-1 text-base font-semibold text-[var(--color-text-main)]">{owner}</p>
-          </div>
+        <div className="grid gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4 md:grid-cols-2">
           <div>
             <p className="text-xs font-semibold text-[var(--color-gray)]">마감</p>
             <p className="mt-1 text-base font-semibold text-[var(--color-text-main)]">{milestone.deadline}</p>
@@ -871,19 +917,27 @@ function MilestoneModal({ milestone, owner, onClose, onUpdate }) {
         <div>
           <p className="text-sm font-semibold text-[var(--color-dark-gray)]">완료 체크</p>
           <div className="mt-2 grid gap-2">
-            {(checkpoints.length ? checkpoints : [milestone.goal]).map((item, index) => (
-              <label key={`${item}-${index}`} className="flex items-start gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-3">
+            {(checkpoints.length ? checkpoints : [milestone.goal]).map((item, index) => {
+              const owner = getCheckpointOwner(milestone, index, roles)
+              const text = getCheckpointText(item)
+
+              return (
+              <label key={`${text}-${index}`} className="flex items-start gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-3">
                 <input
                   type="checkbox"
                   checked={Boolean(completedCheckpoints[index])}
                   onChange={() => toggleCheckpoint(index)}
                   className="mt-1 h-4 w-4 accent-[var(--color-primary)]"
                 />
-                <span className={`text-sm leading-6 text-[var(--color-dark-gray)] ${completedCheckpoints[index] ? 'line-through opacity-60' : ''}`}>
-                  {item}
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-sm leading-6 text-[var(--color-dark-gray)] ${completedCheckpoints[index] ? 'line-through opacity-60' : ''}`}>
+                    {text}
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold text-[var(--color-primary)]">{owner}</span>
                 </span>
               </label>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>
@@ -1433,14 +1487,76 @@ function getInitialCalendarMonthIndex(months = []) {
   return 0
 }
 
-function getMilestoneOwner(milestone, roles = []) {
-  if (milestone.owner) return milestone.owner
-  if (milestone.assignee) return milestone.assignee
-  if (milestone.member) return milestone.member
+function getRoleProgressSummary(role, roleIndex, roles = [], milestones = []) {
+  const normalized = assignMilestoneStatuses(normalizeMilestonesForCalendar(milestones))
+  const assignedMilestones = normalized
+    .map((milestone) => {
+      const checkpoints = getMilestoneCheckpoints(milestone)
+      const assignedIndexes = checkpoints
+        .map((item, index) => ({ item, index }))
+        .filter(({ index }) => getCheckpointOwnerIndex(milestone, index, roles) === roleIndex)
 
-  const role = roles[milestone.originalIndex % Math.max(1, roles.length)]
+      return { milestone, assignedIndexes }
+    })
+    .filter(({ assignedIndexes }) => assignedIndexes.length > 0)
+
+  if (!assignedMilestones.length) {
+    return {
+      progress: 0,
+      urgent: false,
+      nearestLabel: role.role_title || '배정된 마일스톤 업무 없음',
+    }
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const nearest =
+    assignedMilestones.find(({ milestone, assignedIndexes }) => milestone.end >= today && getAssignedProgress(milestone, assignedIndexes) < 100) ||
+    assignedMilestones.find(({ milestone }) => milestone.end >= today) ||
+    assignedMilestones[assignedMilestones.length - 1]
+  const progress = getAssignedProgress(nearest.milestone, nearest.assignedIndexes)
+  const daysLeft = Math.ceil((nearest.milestone.end - today) / 86400000)
+
+  return {
+    progress,
+    urgent: daysLeft <= 3 && progress === 0 && nearest.milestone.status !== '완료',
+    nearestLabel: `${nearest.milestone.phase} · ${nearest.milestone.deadline}`,
+  }
+}
+
+function getAssignedProgress(milestone, assignedIndexes = []) {
+  if (milestone.status === '완료') return 100
+  if (!assignedIndexes.length) return milestone.status === '진행 중' ? 50 : 0
+
+  const completed = assignedIndexes.filter(({ index }) => milestone.completedCheckpoints?.[index]).length
+  return Math.round((completed / assignedIndexes.length) * 100)
+}
+
+function getMilestoneCheckpoints(milestone) {
+  return milestone.checkpoints || milestone.tasks || []
+}
+
+function getCheckpointText(item) {
+  if (typeof item === 'string') return item
+  return item?.task || item?.text || item?.title || item?.goal || '세부 업무'
+}
+
+function getCheckpointOwner(milestone, checkpointIndex, roles = []) {
+  const checkpoint = getMilestoneCheckpoints(milestone)[checkpointIndex]
+  if (checkpoint && typeof checkpoint === 'object') {
+    if (checkpoint.owner) return checkpoint.owner
+    if (checkpoint.assignee) return checkpoint.assignee
+    if (checkpoint.member) return checkpoint.member
+  }
+
+  const role = roles[getCheckpointOwnerIndex(milestone, checkpointIndex, roles)]
   if (!role) return '담당자 미정'
   return role.role_title ? `${role.member} · ${role.role_title}` : role.member
+}
+
+function getCheckpointOwnerIndex(milestone, checkpointIndex, roles = []) {
+  if (!roles.length) return -1
+  return (milestone.originalIndex + checkpointIndex) % roles.length
 }
 
 function isSameDate(left, right) {
