@@ -866,11 +866,15 @@ function MilestoneModal({ milestone, roles = [], onClose, onUpdate }) {
   const completedCheckpoints = milestone.completedCheckpoints || {}
 
   const toggleCheckpoint = (index) => {
+    const nextCompletedCheckpoints = {
+      ...completedCheckpoints,
+      [index]: !completedCheckpoints[index],
+    }
+    const allCompleted = checkpoints.length > 0 && checkpoints.every((_, checkpointIndex) => nextCompletedCheckpoints[checkpointIndex])
+
     onUpdate({
-      completedCheckpoints: {
-        ...completedCheckpoints,
-        [index]: !completedCheckpoints[index],
-      },
+      completedCheckpoints: nextCompletedCheckpoints,
+      ...(allCompleted ? { status: '완료' } : {}),
     })
   }
 
