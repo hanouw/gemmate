@@ -189,6 +189,7 @@ function App() {
       updateProject(project.id, {
         selfProfile: profile,
         gemini,
+        rolesPanelSeen: false,
         progress: {
           ...project.progress,
           tasks: normalizeTasks(gemini.meeting_tasks),
@@ -233,6 +234,7 @@ function App() {
           onCreate={resetForm}
           onDelete={deleteProject}
           onRunAi={runAiDistribution}
+          onUpdateProject={updateProject}
         />
       )}
     </main>
@@ -414,9 +416,15 @@ function ProjectCreate({ form, setForm, handleFiles, isReadingFiles, canCreate, 
   )
 }
 
-function ProjectDetail({ project, error, isGenerating, onBack, onCreate, onDelete, onRunAi }) {
+function ProjectDetail({ project, error, isGenerating, onBack, onCreate, onDelete, onRunAi, onUpdateProject }) {
   const [profileDraft, setProfileDraft] = useState(() => project?.selfProfile || createEmptyProfile())
   const [showProfile, setShowProfile] = useState(false)
+
+  useEffect(() => {
+    if (project?.gemini && project.rolesPanelSeen === false) {
+      onUpdateProject(project.id, { rolesPanelSeen: true })
+    }
+  }, [project?.id, project?.gemini, project?.rolesPanelSeen, onUpdateProject])
 
   if (!project) {
     return (
@@ -442,6 +450,18 @@ function ProjectDetail({ project, error, isGenerating, onBack, onCreate, onDelet
   const saveProfileAndRun = () => {
     onRunAi(project, profileDraft)
     setShowProfile(false)
+  }
+
+  const updateMilestone = (milestoneIndex, patch) => {
+    const nextMilestones = (project.gemini?.milestones || []).map((milestone, index) =>
+      index === milestoneIndex ? { ...milestone, ...patch } : milestone,
+    )
+    onUpdateProject(project.id, {
+      gemini: {
+        ...project.gemini,
+        milestones: nextMilestones,
+      },
+    })
   }
 
   return (
@@ -472,7 +492,11 @@ function ProjectDetail({ project, error, isGenerating, onBack, onCreate, onDelet
         {!project.gemini ? (
           <PreAiState hasProfile={Boolean(project.selfProfile)} onOpenProfile={() => setShowProfile(true)} onRun={handleAiClick} />
         ) : (
-          <ResultSections result={project.gemini} />
+          <ResultSections
+            result={project.gemini}
+            rolesDefaultOpen={project.rolesPanelSeen === false}
+            onUpdateMilestone={updateMilestone}
+          />
         )}
       </div>
     </section>
@@ -561,12 +585,12 @@ function PreAiState({ hasProfile, onOpenProfile, onRun }) {
   )
 }
 
-function ResultSections({ result }) {
+function ResultSections({ result, rolesDefaultOpen, onUpdateMilestone }) {
   return (
     <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="grid gap-5">
-        <RolesGrid roles={result.roles} />
-        <GanttChart milestones={result.milestones} />
+        <RolesGrid roles={result.roles} defaultOpen={rolesDefaultOpen} />
+        <CalendarMilestones milestones={result.milestones} roles={result.roles} onUpdateMilestone={onUpdateMilestone} />
         <MeetingMinutesBoard />
       </div>
       <DirectionCard direction={result.direction} advice={result.advice} warnings={result.warnings} />
@@ -595,24 +619,31 @@ function DirectionCard({ direction, advice = [], warnings = [] }) {
   )
 }
 
-function RolesGrid({ roles = [] }) {
+function RolesGrid({ roles = [], defaultOpen = false }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+
   return (
     <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
-      <SectionTitle eyebrow="R&R" title="역할 분배" />
-      <div className="mt-5 grid gap-3 lg:grid-cols-2">
-        {roles.map((role, index) => (
-          <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
-            <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
-            <h3 className="mt-2 text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{role.role_title}</h3>
-            <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{role.reason}</p>
-            <ul className="mt-4 grid gap-2">
-              {(role.responsibilities || []).map((item) => (
-                <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-dark-gray)]">{item}</li>
-              ))}
-            </ul>
-          </div>
-        ))}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <SectionTitle eyebrow="R&R" title="역할 분배" />
+        <SecondaryButton onClick={() => setIsOpen((current) => !current)}>{isOpen ? '접기' : '펼치기'}</SecondaryButton>
       </div>
+      {isOpen && (
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {roles.map((role, index) => (
+            <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+              <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
+              <h3 className="mt-2 text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{role.role_title}</h3>
+              <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{role.reason}</p>
+              <ul className="mt-4 grid gap-2">
+                {(role.responsibilities || []).map((item) => (
+                  <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-dark-gray)]">{item}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   )
 }
@@ -630,108 +661,177 @@ function ListItems({ items = [], tone = 'blue' }) {
   )
 }
 
-function GanttChart({ milestones = [] }) {
-  const normalized = assignMilestoneStatuses(normalizeMilestonesForGantt(milestones))
-  const currentIndex = normalized.findIndex((milestone) => milestone.status === '진행 중')
-  const [activeIndex, setActiveIndex] = useState(currentIndex >= 0 ? currentIndex : 0)
-  const activeMilestone = normalized[activeIndex] || normalized[0]
-  const totalDays = Math.max(
-    1,
-    Math.ceil((normalized[normalized.length - 1]?.end - normalized[0]?.start) / 86400000) + 1,
-  )
+function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) {
+  const normalized = assignMilestoneStatuses(normalizeMilestonesForCalendar(milestones))
+  const months = buildCalendarMonths(normalized)
+  const [activeMilestoneIndex, setActiveMilestoneIndex] = useState(null)
+  const activeMilestone = normalized.find((milestone) => milestone.originalIndex === activeMilestoneIndex) || null
 
   return (
     <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
-        <SectionTitle eyebrow="Gantt" title="마일스톤 흐름" />
-        <p className="text-sm text-[var(--color-text-secondary)]">날짜와 연계된 전체 진행 흐름</p>
+        <SectionTitle eyebrow="Calendar" title="마일스톤 달력" />
+        <p className="text-sm text-[var(--color-text-secondary)]">마감 날짜를 기준으로 마일스톤을 배치합니다.</p>
       </div>
-      <div className="mt-6 overflow-x-auto">
-        <div className="min-w-[720px]">
-          <div className="grid grid-cols-[180px_1fr] border-b border-[var(--color-secondary-light)] pb-3 text-xs font-semibold text-[var(--color-gray)]">
-            <span>Phase</span>
-            <div className="grid grid-cols-4">
-              {buildGanttTicks(normalized[0]?.start, normalized[normalized.length - 1]?.end).map((tick) => (
-                <span key={tick}>{tick}</span>
+
+      <div className="mt-6 grid gap-5">
+        {months.map((month) => (
+          <div key={month.key} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--color-text-main)]">{month.label}</h3>
+              <div className="flex flex-wrap gap-2">
+                {['완료', '진행 중', '예정'].map((status) => {
+                  const tone = getMilestoneTone(status)
+                  return (
+                    <span
+                      key={status}
+                      className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                      style={{ backgroundColor: tone.badgeBg, color: tone.badgeText }}
+                    >
+                      {status}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-7 border-y border-l border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] text-center text-xs font-semibold text-[var(--color-gray)]">
+              {['일', '월', '화', '수', '목', '금', '토'].map((day) => (
+                <div key={day} className="border-r border-[var(--color-secondary-light)] py-2">
+                  {day}
+                </div>
               ))}
             </div>
-          </div>
-          <div className="mt-3 grid gap-3">
-            {normalized.map((milestone, index) => {
-              const startOffset = Math.max(0, Math.floor((milestone.start - normalized[0].start) / 86400000))
-              const duration = Math.max(1, Math.ceil((milestone.end - milestone.start) / 86400000) + 1)
-              const left = (startOffset / totalDays) * 100
-              const width = Math.min(100 - left, Math.max(8, (duration / totalDays) * 100))
-              const tone = getMilestoneTone(milestone.status)
-              const isActive = activeIndex === index
 
-              return (
-                <button
-                  key={`${milestone.phase}-${index}`}
-                  type="button"
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onFocus={() => setActiveIndex(index)}
-                  onClick={() => setActiveIndex(index)}
-                  className={`grid grid-cols-[180px_1fr] items-center gap-3 rounded-lg p-1 text-left transition ${
-                    isActive ? 'bg-[var(--color-primary-light)]' : 'hover:bg-[var(--color-bg-light)]'
-                  }`}
-                >
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-[var(--color-text-main)]">{milestone.phase}: {milestone.goal}</p>
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                        style={{ backgroundColor: tone.badgeBg, color: tone.badgeText }}
-                      >
-                        {milestone.status}
-                      </span>
+            <div className="grid grid-cols-7 border-l border-[var(--color-secondary-light)]">
+              {month.days.map((day, index) => {
+                const dayMilestones = day ? normalized.filter((milestone) => isSameDate(milestone.end, day)) : []
+
+                return (
+                  <div
+                    key={`${month.key}-${index}`}
+                    className={`min-h-28 border-r border-b border-[var(--color-secondary-light)] p-2 ${
+                      day ? 'bg-[var(--color-bg-white)]' : 'bg-[var(--color-bg-light)]'
+                    }`}
+                  >
+                    {day && (
+                      <p className="text-xs font-semibold text-[var(--color-gray)]">{day.getDate()}</p>
+                    )}
+                    <div className="mt-2 grid gap-1.5">
+                      {dayMilestones.map((milestone) => {
+                        const tone = getMilestoneTone(milestone.status)
+                        return (
+                          <button
+                            key={`${milestone.phase}-${milestone.originalIndex}`}
+                            type="button"
+                            onClick={() => setActiveMilestoneIndex(milestone.originalIndex)}
+                            className="rounded-md border px-2 py-1.5 text-left text-xs font-semibold leading-5 shadow-sm transition hover:-translate-y-0.5"
+                            style={{ borderColor: tone.border, backgroundColor: tone.badgeBg, color: tone.badgeText }}
+                          >
+                            <span className="block truncate">{milestone.phase}</span>
+                            <span className="block truncate font-normal">{milestone.goal}</span>
+                          </button>
+                        )
+                      })}
                     </div>
-                    <p className="mt-1 text-xs text-[var(--color-gray)]">{milestone.deadline}</p>
                   </div>
-                  <div className="relative h-14 rounded-lg bg-[var(--color-bg-light)]">
-                    <div
-                      className="absolute top-2 h-10 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm"
-                      style={{ left: `${left}%`, width: `${width}%`, backgroundColor: tone.bar, color: tone.barText }}
-                    >
-                      <span className="line-clamp-1">{milestone.phase}</span>
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-          {activeMilestone && (
-            <MilestoneDetail milestone={activeMilestone} />
-          )}
-        </div>
+        ))}
       </div>
+
+      {activeMilestone && (
+        <MilestoneModal
+          milestone={activeMilestone}
+          owner={getMilestoneOwner(activeMilestone, roles)}
+          onClose={() => setActiveMilestoneIndex(null)}
+          onUpdate={(patch) => onUpdateMilestone(activeMilestone.originalIndex, patch)}
+        />
+      )}
     </section>
   )
 }
 
-function MilestoneDetail({ milestone }) {
+function MilestoneModal({ milestone, owner, onClose, onUpdate }) {
   const tone = getMilestoneTone(milestone.status)
   const checkpoints = milestone.checkpoints || milestone.tasks || []
+  const completedCheckpoints = milestone.completedCheckpoints || {}
+
+  const toggleCheckpoint = (index) => {
+    onUpdate({
+      completedCheckpoints: {
+        ...completedCheckpoints,
+        [index]: !completedCheckpoints[index],
+      },
+    })
+  }
 
   return (
-    <div className="mt-5 rounded-lg border p-4" style={{ borderColor: tone.border, backgroundColor: tone.detailBg }}>
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--color-text-main)]">
-          {milestone.phase}: {milestone.goal}
-        </h3>
-        <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: tone.badgeBg, color: tone.badgeText }}>
-          {milestone.status}
-        </span>
+    <Modal title={`${milestone.phase}: ${milestone.goal}`} onClose={onClose}>
+      <div className="grid gap-4">
+        <div className="grid gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4 md:grid-cols-3">
+          <div>
+            <p className="text-xs font-semibold text-[var(--color-gray)]">담당</p>
+            <p className="mt-1 text-base font-semibold text-[var(--color-text-main)]">{owner}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-[var(--color-gray)]">마감</p>
+            <p className="mt-1 text-base font-semibold text-[var(--color-text-main)]">{milestone.deadline}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-[var(--color-gray)]">현재 상태</p>
+            <span className="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: tone.badgeBg, color: tone.badgeText }}>
+              {milestone.status}
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-[var(--color-dark-gray)]">상태 변경</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {['진행 중', '예정', '완료'].map((status) => {
+              const statusTone = getMilestoneTone(status)
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => onUpdate({ status })}
+                  className="rounded-lg border px-3 py-2 text-sm font-semibold transition"
+                  style={{
+                    borderColor: milestone.status === status ? statusTone.border : 'var(--color-secondary-light)',
+                    backgroundColor: milestone.status === status ? statusTone.badgeBg : 'var(--color-bg-white)',
+                    color: milestone.status === status ? statusTone.badgeText : 'var(--color-text-main)',
+                  }}
+                >
+                  {status}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-[var(--color-dark-gray)]">완료 체크</p>
+          <div className="mt-2 grid gap-2">
+            {(checkpoints.length ? checkpoints : [milestone.goal]).map((item, index) => (
+              <label key={`${item}-${index}`} className="flex items-start gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-3">
+                <input
+                  type="checkbox"
+                  checked={Boolean(completedCheckpoints[index])}
+                  onChange={() => toggleCheckpoint(index)}
+                  className="mt-1 h-4 w-4 accent-[var(--color-primary)]"
+                />
+                <span className={`text-sm leading-6 text-[var(--color-dark-gray)] ${completedCheckpoints[index] ? 'line-through opacity-60' : ''}`}>
+                  {item}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
-      <p className="mt-2 text-sm font-semibold text-[var(--color-primary)]">마감 {milestone.deadline}</p>
-      <ul className="mt-4 grid gap-2 md:grid-cols-2">
-        {(checkpoints.length ? checkpoints : [milestone.goal]).map((item) => (
-          <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm leading-6 text-[var(--color-dark-gray)]">
-            {item}
-          </li>
-        ))}
-      </ul>
-    </div>
+    </Modal>
   )
 }
 
@@ -1132,18 +1232,20 @@ function buildDeadlineOptions(days) {
   })
 }
 
-function normalizeMilestonesForGantt(milestones = []) {
+function normalizeMilestonesForCalendar(milestones = []) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
   if (!milestones.length) {
     return [
       {
+        originalIndex: 0,
         phase: 'Phase 1',
         deadline: '일정 없음',
         goal: '마일스톤을 생성해 주세요',
         start: today,
         end: today,
+        status: '예정',
       },
     ]
   }
@@ -1153,6 +1255,7 @@ function normalizeMilestonesForGantt(milestones = []) {
     const start = index === 0 ? today : addDays(parseLooseDate(milestones[index - 1]?.deadline) || addDays(today, index * 7), 1)
     return {
       ...milestone,
+      originalIndex: index,
       phase: milestone.phase || `Phase ${index + 1}`,
       goal: milestone.goal || milestone.title || '목표 없음',
       deadline: milestone.deadline || formatShortDate(end),
@@ -1169,6 +1272,7 @@ function assignMilestoneStatuses(milestones = []) {
   today.setHours(0, 0, 0, 0)
 
   const withStatus = milestones.map((milestone) => {
+    if (['완료', '진행 중', '예정'].includes(milestone.status)) return milestone
     if (milestone.end < today) return { ...milestone, status: '완료' }
     if (milestone.start <= today && milestone.end >= today) return { ...milestone, status: '진행 중' }
     return { ...milestone, status: '예정' }
@@ -1215,21 +1319,71 @@ function getMilestoneTone(status) {
   return tones[status] || tones.예정
 }
 
+function buildCalendarMonths(milestones = []) {
+  const first = milestones[0]?.end || new Date()
+  const last = milestones[milestones.length - 1]?.end || first
+  const start = new Date(first.getFullYear(), first.getMonth(), 1)
+  const end = new Date(last.getFullYear(), last.getMonth(), 1)
+  const formatter = new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long' })
+  const months = []
+  const cursor = new Date(start)
+
+  while (cursor <= end) {
+    const monthStart = new Date(cursor)
+    const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0)
+    const days = []
+
+    for (let index = 0; index < monthStart.getDay(); index += 1) {
+      days.push(null)
+    }
+
+    for (let day = 1; day <= monthEnd.getDate(); day += 1) {
+      days.push(new Date(cursor.getFullYear(), cursor.getMonth(), day))
+    }
+
+    while (days.length % 7 !== 0) {
+      days.push(null)
+    }
+
+    months.push({
+      key: `${cursor.getFullYear()}-${cursor.getMonth()}`,
+      label: formatter.format(cursor),
+      days,
+    })
+
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+
+  return months
+}
+
+function getMilestoneOwner(milestone, roles = []) {
+  if (milestone.owner) return milestone.owner
+  if (milestone.assignee) return milestone.assignee
+  if (milestone.member) return milestone.member
+
+  const role = roles[milestone.originalIndex % Math.max(1, roles.length)]
+  if (!role) return '담당자 미정'
+  return role.role_title ? `${role.member} · ${role.role_title}` : role.member
+}
+
+function isSameDate(left, right) {
+  return (
+    left?.getFullYear() === right?.getFullYear() &&
+    left?.getMonth() === right?.getMonth() &&
+    left?.getDate() === right?.getDate()
+  )
+}
+
 function parseLooseDate(value) {
   if (!value) return null
   const text = String(value)
-  const iso = text.match(/20\d{2}[-./]\d{1,2}[-./]\d{1,2}/)
-  if (!iso) return null
+  const match = text.match(/20\d{2}\D+\d{1,2}\D+\d{1,2}/)
+  if (!match) return null
 
-  const [year, month, day] = iso[0].split(/[-./]/).map(Number)
+  const [year, month, day] = match[0].split(/\D+/).filter(Boolean).map(Number)
   const date = new Date(year, month - 1, day)
   return Number.isNaN(date.getTime()) ? null : date
-}
-
-function buildGanttTicks(start, end) {
-  if (!start || !end) return []
-  const total = Math.max(1, end - start)
-  return [0, 0.33, 0.66, 1].map((ratio) => formatShortDate(new Date(start.getTime() + total * ratio)))
 }
 
 function formatShortDate(date) {
