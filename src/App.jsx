@@ -231,7 +231,6 @@ function App() {
           error={error}
           isGenerating={isGenerating}
           onBack={() => navigate('dashboard')}
-          onCreate={resetForm}
           onDelete={deleteProject}
           onRunAi={runAiDistribution}
           onUpdateProject={updateProject}
@@ -311,7 +310,12 @@ function Dashboard({ projects, onCreate, onOpen, onDelete }) {
   return (
     <section className="px-5 py-12">
       <div className="mx-auto max-w-6xl">
-        <PageHead eyebrow="Dashboard" title="저장된 프로젝트" description="이 브라우저의 localStorage에 저장된 프로젝트만 표시됩니다." />
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <PageHead eyebrow="Dashboard" title="저장된 프로젝트" description="이 브라우저의 localStorage에 저장된 프로젝트만 표시됩니다." />
+          <div className="sm:pb-1">
+            <PrimaryButton onClick={onCreate}>새 프로젝트</PrimaryButton>
+          </div>
+        </div>
         {projects.length === 0 ? (
           <EmptyState onCreate={onCreate} />
         ) : (
@@ -323,7 +327,7 @@ function Dashboard({ projects, onCreate, onOpen, onDelete }) {
                     <p className="text-sm text-[var(--color-secondary)]">{project.input.course}</p>
                     <h2 className="mt-2 text-2xl font-normal tracking-[-0.025em] text-[var(--color-text-main)]">{project.input.title}</h2>
                   </div>
-                  <Pill>{project.gemini ? 'AI 완료' : '입력 대기'}</Pill>
+                  <DashboardStatusPill done={Boolean(project.gemini)} />
                 </div>
                 <div className="mt-5 grid gap-2 sm:grid-cols-3">
                   <MiniStat label="팀원 수" value={`${project.input.memberCount}명`} />
@@ -352,6 +356,24 @@ function EmptyState({ onCreate }) {
         <PrimaryButton onClick={onCreate}>첫 프로젝트 만들기</PrimaryButton>
       </div>
     </div>
+  )
+}
+
+function DashboardStatusPill({ done }) {
+  return (
+    <span className="inline-flex shrink-0 flex-col rounded-full bg-[var(--color-primary-light)] px-3 py-1 text-center text-[11px] font-semibold uppercase leading-tight tracking-[0.08em] text-[var(--color-primary)] sm:flex-row sm:gap-1">
+      {done ? (
+        <>
+          <span>AI</span>
+          <span>완료</span>
+        </>
+      ) : (
+        <>
+          <span>입력</span>
+          <span>대기</span>
+        </>
+      )}
+    </span>
   )
 }
 
@@ -416,7 +438,7 @@ function ProjectCreate({ form, setForm, handleFiles, isReadingFiles, canCreate, 
   )
 }
 
-function ProjectDetail({ project, error, isGenerating, onBack, onCreate, onDelete, onRunAi, onUpdateProject }) {
+function ProjectDetail({ project, error, isGenerating, onBack, onDelete, onRunAi, onUpdateProject }) {
   const [profileDraft, setProfileDraft] = useState(() => project?.selfProfile || createEmptyProfile())
   const [showProfile, setShowProfile] = useState(false)
 
@@ -475,7 +497,6 @@ function ProjectDetail({ project, error, isGenerating, onBack, onCreate, onDelet
           </div>
           <div className="flex flex-wrap gap-2">
             <SecondaryButton onClick={onBack}>대시보드</SecondaryButton>
-            <SecondaryButton onClick={onCreate}>새 프로젝트</SecondaryButton>
             <PrimaryButton disabled={isGenerating} onClick={handleAiClick}>{isGenerating ? '분배 중...' : 'AI로 분배하기'}</PrimaryButton>
             <DangerButton onClick={() => onDelete(project.id)}>삭제</DangerButton>
           </div>
@@ -817,7 +838,7 @@ function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) 
                 return (
                   <div
                     key={`${visibleMonth.key}-${index}`}
-                    className={`min-h-32 border-r border-b border-[var(--color-secondary-light)] p-2 ${
+                    className={`aspect-[1/2.5] min-h-0 border-r border-b border-[var(--color-secondary-light)] p-1.5 md:aspect-auto md:min-h-24 md:p-2 ${
                       day ? 'bg-[var(--color-bg-white)]' : 'bg-[var(--color-bg-light)]'
                     }`}
                   >
@@ -835,7 +856,8 @@ function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) 
                             className="rounded-md border px-2 py-1.5 text-left text-xs font-semibold leading-5 shadow-sm transition hover:-translate-y-0.5"
                             style={{ borderColor: tone.border, backgroundColor: tone.badgeBg, color: tone.badgeText }}
                           >
-                            <span className="block whitespace-normal break-words">{milestone.phase}</span>
+                            <span className="hidden sm:block">{getPhaseDisplayLabel(milestone.phase)}</span>
+                            <span className="block sm:hidden">{getPhaseMobileLabel(milestone.phase)}</span>
                           </button>
                         )
                       })}
@@ -1475,6 +1497,23 @@ function getInitialCalendarMonthIndex(months = []) {
 
   if (currentIndex >= 0) return currentIndex
   return 0
+}
+
+function getPhaseNumber(phase = '') {
+  const match = String(phase).match(/phase\s*(\d+)/i)
+  return match?.[1] || ''
+}
+
+function getPhaseDisplayLabel(phase = '') {
+  const number = getPhaseNumber(phase)
+  if (number) return `Phase${number}`
+  return String(phase).split(':')[0] || 'Phase'
+}
+
+function getPhaseMobileLabel(phase = '') {
+  const number = getPhaseNumber(phase)
+  if (number) return `P.${number}`
+  return getPhaseDisplayLabel(phase).slice(0, 4)
 }
 
 function getRoleProgressSummary(role, roleIndex, roles = [], milestones = []) {
