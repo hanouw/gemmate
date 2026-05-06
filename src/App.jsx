@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import googleCalendarIcon from './assets/google-calendar.png'
+import googleDocsIcon from './assets/google-docs.png'
+import googleMeetIcon from './assets/google-meet.png'
 
 const GEMINI_API_KEY = import.meta.env.GAK
 const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-lite'
@@ -249,7 +252,7 @@ function Header({ navigate }) {
           <span className="block text-xs text-[var(--color-secondary)]">Yonsei x Gemini</span>
         </button>
         <span className="rounded-full border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] px-3 py-1 text-xs font-semibold text-[var(--color-secondary)]">
-          Local prototype
+          민지영 이제하
         </span>
       </div>
     </header>
@@ -311,7 +314,7 @@ function Dashboard({ projects, onCreate, onOpen, onDelete }) {
     <section className="px-5 py-12">
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <PageHead eyebrow="Dashboard" title="저장된 프로젝트" description="이 브라우저의 localStorage에 저장된 프로젝트만 표시됩니다." />
+          <PageHead eyebrow="Dashboard" title="저장된 프로젝트" description="" />
           <div className="sm:pb-1">
             <PrimaryButton onClick={onCreate}>새 프로젝트</PrimaryButton>
           </div>
@@ -633,31 +636,58 @@ function ProjectSidePanels({ roles = [], milestones = [], direction, advice = []
       <SidePanel id="direction" eyebrow="Direction" title="방향" activePanel={activePanel} setActivePanel={setActivePanel}>
         <DirectionCard direction={direction} advice={advice} warnings={warnings} />
       </SidePanel>
-      <SidePanel id="meetings" eyebrow="Example" title="회의목록" activePanel={activePanel} setActivePanel={setActivePanel}>
+      <SidePanel
+        id="meetings"
+        eyebrow="RECORD"
+        title="회의록 목록"
+        activePanel={activePanel}
+        setActivePanel={setActivePanel}
+        icon={googleMeetIcon}
+        iconAlt="Google Meet"
+        iconHref="https://meet.google.com/"
+      >
         <MeetingMinutesBoard embedded />
       </SidePanel>
     </aside>
   )
 }
 
-function SidePanel({ id, eyebrow, title, activePanel, setActivePanel, children }) {
+function SidePanel({ id, eyebrow, title, activePanel, setActivePanel, children, icon = null, iconAlt = '', iconHref = '' }) {
   const isOpen = activePanel === id
 
   return (
     <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)]">
-      <button
-        type="button"
-        onClick={() => setActivePanel(isOpen ? null : id)}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-      >
-        <span>
+      <div className="flex items-center justify-between gap-3 px-5 py-4">
+        <button
+          type="button"
+          onClick={() => setActivePanel(isOpen ? null : id)}
+          className="min-w-0 flex-1 text-left"
+        >
           <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-primary)]">{eyebrow}</span>
-          <span className="mt-1 block text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{title}</span>
-        </span>
-        <span className="rounded-lg border border-[var(--color-secondary-light)] px-2 py-1 text-xs font-semibold text-[var(--color-text-main)]">
+          <span className="mt-1 flex items-center gap-2 text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">
+            {title}
+            {icon && !iconHref && <img src={icon} alt={iconAlt} className="h-6 w-6 object-contain" />}
+          </span>
+        </button>
+        {icon && iconHref && (
+          <a
+            href={iconHref}
+            target="_blank"
+            rel="noreferrer"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md hover:bg-[var(--color-bg-light)]"
+            aria-label={`${iconAlt} 열기`}
+          >
+            <img src={icon} alt={iconAlt} className="h-6 w-6 object-contain" />
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={() => setActivePanel(isOpen ? null : id)}
+          className="shrink-0 rounded-lg border border-[var(--color-secondary-light)] px-2 py-1 text-xs font-semibold text-[var(--color-text-main)]"
+        >
           {isOpen ? '접기' : '펼치기'}
-        </span>
-      </button>
+        </button>
+      </div>
       {isOpen && <div className="border-t border-[var(--color-secondary-light)] p-5">{children}</div>}
     </section>
   )
@@ -778,7 +808,7 @@ function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) 
   return (
     <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <SectionTitle eyebrow="Calendar" title="마일스톤 달력" />
+        <SectionTitle eyebrow="Calendar" title="마일스톤 달력" icon={googleCalendarIcon} iconAlt="Google Calendar" />
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm text-[var(--color-text-secondary)]">마감 날짜를 기준으로 마일스톤을 배치합니다.</p>
           <div className="flex items-center gap-2">
@@ -977,20 +1007,43 @@ function MeetingMinutesBoard({ embedded = false }) {
   const content = (
     <>
       {!embedded && (
-      <SectionTitle eyebrow="Example" title="회의록 목록" />
+        <SectionTitle
+          eyebrow="RECORD"
+          title="회의록 목록"
+          icon={googleMeetIcon}
+          iconAlt="Google Meet"
+          iconHref="https://meet.google.com/"
+        />
       )}
-      <p className="mt-3 text-sm text-[var(--color-text-secondary)]">예시입니다) AI 분배 후 보이는 고정 회의록입니다. 날짜를 클릭하면 내용을 볼 수 있습니다.</p>
-      <div className="mt-5 grid gap-3">
+      {embedded && (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-[var(--color-text-secondary)]">날짜를 클릭하면 내용을 볼 수 있습니다.</p>
+          <a
+            href="https://meet.google.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md hover:bg-[var(--color-bg-light)]"
+            aria-label="Google Meet 열기"
+          >
+            <img src={googleMeetIcon} alt="Google Meet" className="h-5 w-5 object-contain" />
+          </a>
+        </div>
+      )}
+      {!embedded && <p className="mt-3 text-sm text-[var(--color-text-secondary)]">날짜를 클릭하면 내용을 볼 수 있습니다.</p>}
+      <div className="mt-4 overflow-hidden rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)]">
         {sampleMeetings.map((meeting) => (
           <button
             key={meeting.date}
             type="button"
             onClick={() => setActiveMeeting(meeting)}
-            className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4 text-left"
+            className="grid w-full grid-cols-[24px_1fr_auto] items-center gap-3 border-b border-[var(--color-secondary-light)] px-3 py-2.5 text-left last:border-b-0 hover:bg-[var(--color-bg-light)]"
           >
-            <p className="text-sm font-semibold text-[var(--color-primary)]">{meeting.date}</p>
-            <p className="mt-2 text-lg font-semibold text-[var(--color-text-main)]">{meeting.title}</p>
-            <p className="mt-2 text-xs text-[var(--color-gray)]">{meeting.summary}</p>
+            <img src={googleDocsIcon} alt="" className="h-5 w-5 object-contain" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-[var(--color-text-main)]">{meeting.title}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-[var(--color-gray)]">{meeting.summary}</span>
+            </span>
+            <span className="text-xs font-medium text-[var(--color-gray)]">{meeting.date}</span>
           </button>
         ))}
       </div>
@@ -1097,11 +1150,30 @@ function PageHead({ eyebrow, title, description }) {
   )
 }
 
-function SectionTitle({ eyebrow, title }) {
+function SectionTitle({ eyebrow, title, icon = null, iconAlt = '', iconHref = '' }) {
+  const iconElement = icon ? (
+    <img src={icon} alt={iconAlt} className="h-7 w-7 object-contain" />
+  ) : null
+
   return (
     <div>
       <Pill>{eyebrow}</Pill>
-      <h2 className="mt-3 text-2xl font-normal tracking-[-0.03em] text-[var(--color-text-main)]">{title}</h2>
+      <div className="mt-3 flex items-center gap-2">
+        <h2 className="text-2xl font-normal tracking-[-0.03em] text-[var(--color-text-main)]">{title}</h2>
+        {iconHref && iconElement ? (
+          <a
+            href={iconHref}
+            target="_blank"
+            rel="noreferrer"
+            className="grid h-8 w-8 place-items-center rounded-md hover:bg-[var(--color-bg-white)]"
+            aria-label={`${iconAlt} 열기`}
+          >
+            {iconElement}
+          </a>
+        ) : (
+          iconElement
+        )}
+      </div>
     </div>
   )
 }
@@ -1202,7 +1274,8 @@ function PrimaryButton({ children, onClick, disabled = false }) {
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-[var(--color-light-gray)]"
+      className="rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold !text-white transition disabled:cursor-not-allowed disabled:bg-[var(--color-light-gray)]"
+      style={{ color: '#ffffff' }}
     >
       {children}
     </button>
