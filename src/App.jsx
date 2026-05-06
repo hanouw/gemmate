@@ -587,20 +587,20 @@ function PreAiState({ hasProfile, onOpenProfile, onRun }) {
 
 function ResultSections({ result, rolesDefaultOpen, onUpdateMilestone }) {
   return (
-    <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <div className="grid gap-5">
+    <div className="mt-6 grid gap-5">
+      <div className="grid gap-5 xl:grid-cols-2">
         <RolesGrid roles={result.roles} defaultOpen={rolesDefaultOpen} />
-        <CalendarMilestones milestones={result.milestones} roles={result.roles} onUpdateMilestone={onUpdateMilestone} />
-        <MeetingMinutesBoard />
+        <DirectionCard direction={result.direction} advice={result.advice} warnings={result.warnings} />
       </div>
-      <DirectionCard direction={result.direction} advice={result.advice} warnings={result.warnings} />
+      <CalendarMilestones milestones={result.milestones} roles={result.roles} onUpdateMilestone={onUpdateMilestone} />
+      <MeetingMinutesBoard />
     </div>
   )
 }
 
 function DirectionCard({ direction, advice = [], warnings = [] }) {
   return (
-    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5 xl:sticky xl:top-5 xl:self-start">
+    <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
       <div className="grid gap-4">
         <div>
           <Pill>Direction</Pill>
@@ -629,19 +629,21 @@ function RolesGrid({ roles = [], defaultOpen = false }) {
         <SecondaryButton onClick={() => setIsOpen((current) => !current)}>{isOpen ? '접기' : '펼치기'}</SecondaryButton>
       </div>
       {isOpen && (
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {roles.map((role, index) => (
-            <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
-              <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
-              <h3 className="mt-2 text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{role.role_title}</h3>
-              <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{role.reason}</p>
-              <ul className="mt-4 grid gap-2">
-                {(role.responsibilities || []).map((item) => (
-                  <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-dark-gray)]">{item}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <div className="mt-5 max-h-[520px] overflow-y-auto pr-1">
+          <div className="grid gap-3">
+            {roles.map((role, index) => (
+              <div key={`${role.member}-${index}`} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+                <p className="text-sm font-semibold text-[var(--color-primary)]">{role.member}</p>
+                <h3 className="mt-2 text-xl font-normal tracking-[-0.02em] text-[var(--color-text-main)]">{role.role_title}</h3>
+                <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">{role.reason}</p>
+                <ul className="mt-4 grid gap-2">
+                  {(role.responsibilities || []).map((item) => (
+                    <li key={item} className="rounded-md bg-[var(--color-bg-white)] px-3 py-2 text-sm text-[var(--color-dark-gray)]">{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </section>
@@ -664,21 +666,44 @@ function ListItems({ items = [], tone = 'blue' }) {
 function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) {
   const normalized = assignMilestoneStatuses(normalizeMilestonesForCalendar(milestones))
   const months = buildCalendarMonths(normalized)
+  const currentMonthIndex = getInitialCalendarMonthIndex(months)
+  const [visibleMonthIndex, setVisibleMonthIndex] = useState(currentMonthIndex)
   const [activeMilestoneIndex, setActiveMilestoneIndex] = useState(null)
+  const visibleMonth = months[visibleMonthIndex] || months[0]
   const activeMilestone = normalized.find((milestone) => milestone.originalIndex === activeMilestoneIndex) || null
 
   return (
     <section className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5">
-      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
         <SectionTitle eyebrow="Calendar" title="마일스톤 달력" />
-        <p className="text-sm text-[var(--color-text-secondary)]">마감 날짜를 기준으로 마일스톤을 배치합니다.</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-[var(--color-text-secondary)]">마감 날짜를 기준으로 마일스톤을 배치합니다.</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVisibleMonthIndex((index) => Math.max(0, index - 1))}
+              disabled={visibleMonthIndex === 0}
+              className="h-9 w-9 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] text-sm font-semibold text-[var(--color-text-main)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              &lt;
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibleMonthIndex((index) => Math.min(months.length - 1, index + 1))}
+              disabled={visibleMonthIndex >= months.length - 1}
+              className="h-9 w-9 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] text-sm font-semibold text-[var(--color-text-main)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              &gt;
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="mt-6 grid gap-5">
-        {months.map((month) => (
-          <div key={month.key} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+      <div className="mt-6">
+        {visibleMonth && (
+          <div key={visibleMonth.key} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--color-text-main)]">{month.label}</h3>
+              <h3 className="text-xl font-semibold tracking-[-0.02em] text-[var(--color-text-main)]">{visibleMonth.label}</h3>
               <div className="flex flex-wrap gap-2">
                 {['완료', '진행 중', '예정'].map((status) => {
                   const tone = getMilestoneTone(status)
@@ -704,13 +729,13 @@ function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) 
             </div>
 
             <div className="grid grid-cols-7 border-l border-[var(--color-secondary-light)]">
-              {month.days.map((day, index) => {
+              {visibleMonth.days.map((day, index) => {
                 const dayMilestones = day ? normalized.filter((milestone) => isSameDate(milestone.end, day)) : []
 
                 return (
                   <div
-                    key={`${month.key}-${index}`}
-                    className={`min-h-28 border-r border-b border-[var(--color-secondary-light)] p-2 ${
+                    key={`${visibleMonth.key}-${index}`}
+                    className={`min-h-32 border-r border-b border-[var(--color-secondary-light)] p-2 ${
                       day ? 'bg-[var(--color-bg-white)]' : 'bg-[var(--color-bg-light)]'
                     }`}
                   >
@@ -728,8 +753,8 @@ function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) 
                             className="rounded-md border px-2 py-1.5 text-left text-xs font-semibold leading-5 shadow-sm transition hover:-translate-y-0.5"
                             style={{ borderColor: tone.border, backgroundColor: tone.badgeBg, color: tone.badgeText }}
                           >
-                            <span className="block truncate">{milestone.phase}</span>
-                            <span className="block truncate font-normal">{milestone.goal}</span>
+                            <span className="block whitespace-normal break-words">{milestone.phase}</span>
+                            <span className="block whitespace-normal break-words font-normal">{milestone.goal}</span>
                           </button>
                         )
                       })}
@@ -739,7 +764,7 @@ function CalendarMilestones({ milestones = [], roles = [], onUpdateMilestone }) 
               })}
             </div>
           </div>
-        ))}
+        )}
       </div>
 
       {activeMilestone && (
@@ -1355,6 +1380,16 @@ function buildCalendarMonths(milestones = []) {
   }
 
   return months
+}
+
+function getInitialCalendarMonthIndex(months = []) {
+  const today = new Date()
+  const currentIndex = months.findIndex((month) =>
+    month.days.some((day) => day && day.getFullYear() === today.getFullYear() && day.getMonth() === today.getMonth()),
+  )
+
+  if (currentIndex >= 0) return currentIndex
+  return 0
 }
 
 function getMilestoneOwner(milestone, roles = []) {
