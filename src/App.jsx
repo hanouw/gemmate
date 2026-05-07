@@ -590,7 +590,7 @@ function ProfessorProjectCard({ summary, onOpenProject }) {
 
 function ProfessorAiSummaryModal({ summary, onClose }) {
   const { project, roles, roleContributions, milestones } = summary
-  const meetings = sampleMeetings.slice(0, 3)
+  const meetings = summary.meetings || []
   const completedMilestones = milestones.filter((milestone) => milestone.status === '완료').length
   const activeMilestones = milestones.filter((milestone) => milestone.status === '진행 중').length
 
@@ -628,12 +628,18 @@ function ProfessorAiSummaryModal({ summary, onClose }) {
         <section className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
           <h3 className="text-base font-semibold text-[var(--color-text-main)]">회의 기반 수행 흔적</h3>
           <div className="mt-3 grid gap-2">
-            {meetings.map((meeting) => (
-              <div key={meeting.date} className="rounded-lg bg-[var(--color-bg-light)] px-3 py-2">
-                <p className="text-sm font-semibold text-[var(--color-text-main)]">{meeting.date} · {meeting.title}</p>
-                <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">{meeting.summary}</p>
-              </div>
-            ))}
+            {meetings.length ? (
+              meetings.map((meeting) => (
+                <div key={meeting.date} className="rounded-lg bg-[var(--color-bg-light)] px-3 py-2">
+                  <p className="text-sm font-semibold text-[var(--color-text-main)]">{meeting.date} · {meeting.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">{meeting.summary}</p>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-lg bg-[var(--color-bg-light)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+                아직 회의록 데이터가 없습니다.
+              </p>
+            )}
           </div>
         </section>
       </div>
@@ -644,6 +650,7 @@ function ProfessorAiSummaryModal({ summary, onClose }) {
 function buildProfessorProjectSummary(project) {
   const roles = project.gemini?.roles || []
   const milestones = project.gemini?.milestones || []
+  const meetings = project.id === 'starter_public_policy_2026' ? sampleMeetings.slice(0, 3) : (project.progress?.minutes || [])
   const totals = milestones.reduce(
     (acc, milestone) => {
       const checkpoints = getMilestoneCheckpoints(milestone)
@@ -696,6 +703,7 @@ function buildProfessorProjectSummary(project) {
     completedCount: totals.completedCount,
     checkpointCount: totals.checkpointCount,
     statusCounts: totals.statusCounts,
+    meetings,
     warnings: project.gemini?.warnings || [],
     direction: project.gemini?.direction || null,
     aiCompleted: Boolean(project.gemini),
@@ -840,6 +848,7 @@ function ProjectDetail({ project, error, isGenerating, onBack, onDelete, onRunAi
           <PreAiState hasProfile={Boolean(project.selfProfile)} onOpenProfile={() => setShowProfile(true)} onRun={handleAiClick} />
         ) : (
           <ResultSections
+            projectId={project.id}
             result={project.gemini}
             rolesDefaultOpen={project.rolesPanelSeen === false}
             onUpdateMilestone={updateMilestone}
@@ -932,7 +941,9 @@ function PreAiState({ hasProfile, onOpenProfile, onRun }) {
   )
 }
 
-function ResultSections({ result, rolesDefaultOpen, onUpdateMilestone }) {
+function ResultSections({ projectId, result, rolesDefaultOpen, onUpdateMilestone }) {
+  const showSampleMeetings = projectId === 'starter_public_policy_2026'
+
   return (
     <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(300px,1fr)]">
       <CalendarMilestones milestones={result.milestones} roles={result.roles} onUpdateMilestone={onUpdateMilestone} />
@@ -942,13 +953,14 @@ function ResultSections({ result, rolesDefaultOpen, onUpdateMilestone }) {
         direction={result.direction}
         advice={result.advice}
         warnings={result.warnings}
+        showMeetings={showSampleMeetings}
         defaultOpen={rolesDefaultOpen ? 'roles' : null}
       />
     </div>
   )
 }
 
-function ProjectSidePanels({ roles = [], milestones = [], direction, advice = [], warnings = [], defaultOpen = null }) {
+function ProjectSidePanels({ roles = [], milestones = [], direction, advice = [], warnings = [], showMeetings = false, defaultOpen = null }) {
   const [activePanel, setActivePanel] = useState(defaultOpen)
 
   return (
@@ -959,18 +971,20 @@ function ProjectSidePanels({ roles = [], milestones = [], direction, advice = []
       <SidePanel id="direction" eyebrow="Direction" title="방향" activePanel={activePanel} setActivePanel={setActivePanel}>
         <DirectionCard direction={direction} advice={advice} warnings={warnings} />
       </SidePanel>
-      <SidePanel
-        id="meetings"
-        eyebrow="RECORD"
-        title="회의록 목록"
-        activePanel={activePanel}
-        setActivePanel={setActivePanel}
-        icon={googleMeetIcon}
-        iconAlt="Google Meet"
-        iconHref="https://meet.google.com/"
-      >
-        <MeetingMinutesBoard embedded />
-      </SidePanel>
+      {showMeetings && (
+        <SidePanel
+          id="meetings"
+          eyebrow="RECORD"
+          title="회의록 목록"
+          activePanel={activePanel}
+          setActivePanel={setActivePanel}
+          icon={googleMeetIcon}
+          iconAlt="Google Meet"
+          iconHref="https://meet.google.com/"
+        >
+          <MeetingMinutesBoard embedded />
+        </SidePanel>
+      )}
     </aside>
   )
 }
