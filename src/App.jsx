@@ -258,11 +258,11 @@ function Landing({ onStart, onDashboard, projectCount }) {
               Yonsei Social Sciences x Gemini
             </div>
             <h1 className="mt-7 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-[-0.05em] text-[var(--color-text-main)] sm:text-6xl lg:text-7xl">
-              팀플을 관리하는 AI 팀메이트, Gemmate
+              팀플의 패러다임을 바꾸는 AI 팀메이트, Gemmate
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-8 text-[var(--color-text-secondary)]">
               Gemmate는 대학 팀 프로젝트에서 반복되는 무임승차 및 역할 불균형 개선, 일정 관리, 회의록 작성 등 잡무를 덜어주기 위한 협업 시스템입니다.
-              과제 기준과 팀원의 역량을 Gemini가 함께 읽고, 실행 가능한 역할 분배와 마감 기반 계획으로 바꿉니다.
+              가장 완벽한 팀원 Gemmate와 함께 프로젝트의 본질에 집중하세요.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <PrimaryButton onClick={onStart}>프로젝트 만들기</PrimaryButton>
