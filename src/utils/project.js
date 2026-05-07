@@ -28,6 +28,7 @@ export function parseHashRoute() {
   const [screen, projectId] = raw.split('/')
   if (screen === 'dashboard') return { screen: 'dashboard', projectId: null }
   if (screen === 'create') return { screen: 'create', projectId: null }
+  if (screen === 'professor') return { screen: 'professor', projectId: null }
   if (screen === 'project' && projectId) return { screen: 'project', projectId }
   return { screen: 'landing', projectId: null }
 }
@@ -35,6 +36,7 @@ export function parseHashRoute() {
 export function toHash(screen, projectId = null) {
   if (screen === 'dashboard') return '#/dashboard'
   if (screen === 'create') return '#/create'
+  if (screen === 'professor') return '#/professor'
   if (screen === 'project' && projectId) return `#/project/${projectId}`
   return '#/'
 }

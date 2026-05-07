@@ -3,7 +3,7 @@ import { Modal, PageHead, TimelineRow, MiniStat, ReadOnlyBlock, InfoCard, Panel,
 import { CalendarMilestones, MeetingMinutesBoard, InsightPopover } from './components/projectSections.jsx'
 import { skillKeywords } from './data/demoData.js'
 import { callGemini, hasGeminiApiKey } from './services/gemini.js'
-import { STORAGE_KEY, makeId, createEmptyForm, createEmptyProfile, parseHashRoute, toHash, getRoleProgressSummary, loadProjects, normalizeTasks } from './utils/project.js'
+import { STORAGE_KEY, makeId, createEmptyForm, createEmptyProfile, parseHashRoute, toHash, getRoleProgressSummary, getMilestoneCheckpoints, loadProjects, normalizeTasks } from './utils/project.js'
 import googleCalendarIcon from './assets/google-calendar.png'
 import googleDocsIcon from './assets/google-docs.png'
 import googleDriveIcon from './assets/google-drive.png'
@@ -154,6 +154,7 @@ function App() {
       <Header navigate={navigate} />
       {screen === 'landing' && <Landing onStart={resetForm} onDashboard={() => navigate('dashboard')} projectCount={projects.length} />}
       {screen === 'dashboard' && <Dashboard projects={projects} onCreate={resetForm} onOpen={openProject} onDelete={deleteProject} />}
+      {screen === 'professor' && <ProfessorReport projects={projects} onOpenProject={openProject} />}
       {screen === 'create' && (
         <ProjectCreate
           form={form}
@@ -188,9 +189,7 @@ function Header({ navigate }) {
           <span className="block text-lg font-semibold tracking-[-0.02em] text-[var(--color-primary)]">Gemmate</span>
           <span className="block text-xs text-[var(--color-secondary)]">Yonsei x Gemini</span>
         </button>
-        <span className="rounded-full border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] px-3 py-1 text-xs font-semibold text-[var(--color-secondary)]">
-          민지영 이제하
-        </span>
+        <SecondaryButton onClick={() => navigate('professor')}>교수님 페이지로 전환</SecondaryButton>
       </div>
     </header>
   )
@@ -214,9 +213,9 @@ function Landing({ onStart, onDashboard, projectCount }) {
   const featureCards = [
     {
       label: '01',
-      title: '프로젝트 맥락 입력',
+      title: '구글 워크스페이스 연동',
       icon: googleDriveIcon,
-      text: '공지사항, 평가기준, 제출 형식, 마감일을 입력하면 과제의 핵심 목표와 주의할 기준을 먼저 정리합니다.',
+      text: '모두가 사용하는 구글을 활용한 데이터 입력과 결과 공유로 별도의 학습 없이도 팀원들이 쉽게 접근할 수 있습니다.',
     },
     {
       label: '02',
@@ -266,8 +265,8 @@ function Landing({ onStart, onDashboard, projectCount }) {
               <SecondaryButton onClick={onDashboard}>저장된 프로젝트 {projectCount > 0 ? `(${projectCount})` : ''}</SecondaryButton>
             </div>
             <div className="mt-9 grid max-w-2xl gap-3 sm:grid-cols-3">
-              <LandingMetric value="8" label="핵심 협업 기능" />
-              <LandingMetric value="AI" label="역량 기반 분배" />
+              <LandingMetric value="Automation" label="회의록 자동 작성" />
+              <LandingMetric value="Distribution" label="업무 자동 분배" />
               <LandingMetric value="Connect" label="Google 워크스페이스 연동" />
             </div>
           </div>
@@ -301,23 +300,6 @@ function Landing({ onStart, onDashboard, projectCount }) {
               {featureCards.map((card) => (
                 <LandingFeatureStep key={card.label} card={card} />
               ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="px-5 py-16">
-        <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          <PageHead
-            eyebrow="Prototype"
-            title="실제 사용 흐름은 가볍게, 결과는 프로젝트처럼"
-            description="프로젝트 생성 시에는 팀원 수와 과제 정보만 입력하고, 상세 페이지에서 본인의 역량을 한 번만 입력합니다. 이후 AI 분배 결과는 대시보드에서 확인할 수 있습니다."
-          />
-          <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4 shadow-[0_20px_60px_rgba(0,35,78,0.08)]">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <InfoCard title="1. 최소 정보로 생성" text="프로젝트 생성 시에는 팀원 수와 과제 정보만 입력합니다." />
-              <InfoCard title="2. 내 역량은 상세에서" text="프로젝트에 들어가서 본인의 역량 정보가 없을 때 한 번만 입력합니다." />
-              <InfoCard title="3. AI로 분배" text="내 정보를 기준으로 나머지 팀원 역량은 Gemini가 합리적으로 가정합니다." />
             </div>
           </div>
         </div>
@@ -376,7 +358,7 @@ function HeroPreview() {
               <GeminiMark className="h-9 w-9 shrink-0" />
             </div>
             <div className="mt-4 grid gap-2">
-              {['재무 근거 수집', '역할 자동 분배', '마감 기반 마일스톤'].map((item, index) => (
+              {['회의록 자동 작성', '역할 자동 분배', '마감 기반 마일스톤'].map((item, index) => (
                 <div key={item} className="flex items-center gap-3 rounded-xl bg-[var(--color-bg-light)] px-3 py-2">
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--color-primary)] text-[11px] font-semibold text-white">{index + 1}</span>
                   <span className="text-sm font-semibold text-[var(--color-text-secondary)]">{item}</span>
@@ -418,7 +400,7 @@ function AgentPanel() {
         <TimelineRow tone="blue" label="READ" text="평가기준과 공지사항을 읽습니다." />
         <TimelineRow tone="green" label="MATCH" text="내 역량과 팀원 수를 바탕으로 역할을 추론합니다." />
         <TimelineRow tone="yellow" label="PLAN" text="마감일부터 역산한 마일스톤을 구성합니다." />
-        <TimelineRow tone="red" label="DONE" text="대시보드에 저장 가능한 프로젝트 계획을 반환합니다." />
+        <TimelineRow tone="red" label="DONE" text="프로젝트 계획을 제안합니다." />
       </div>
     </div>
   )
@@ -495,6 +477,195 @@ function DashboardStatusPill({ done }) {
   )
 }
 
+function ProfessorReport({ projects = [], onOpenProject }) {
+  const summaries = projects.map(buildProfessorProjectSummary)
+  const aiCompleted = summaries.filter((summary) => summary.aiCompleted).length
+  const averageProgress = summaries.length
+    ? Math.round(summaries.reduce((sum, summary) => sum + summary.completion, 0) / summaries.length)
+    : 0
+  const urgentProjects = summaries.filter((summary) => summary.hasUrgentRole).length
+
+  return (
+    <section className="px-5 py-12">
+      <div className="mx-auto max-w-6xl">
+        <div className="rounded-[1.5rem] border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5 shadow-[0_20px_60px_rgba(0,35,78,0.08)] sm:p-7">
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
+            <PageHead
+              eyebrow="Professor Report"
+              title="학생 프로젝트 진행 현황 리포트"
+              description="학생들이 생성한 프로젝트의 역할 분배, 마일스톤 진행률, 리스크를 교수자 관점에서 한 장으로 확인합니다."
+            />
+            <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[390px]">
+              <MiniStat label="관리 프로젝트" value={`${summaries.length}개`} />
+              <MiniStat label="AI 분배 완료" value={`${aiCompleted}개`} />
+              <MiniStat label="평균 진행률" value={`${averageProgress}%`} />
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+            <ProfessorSignal label="평가 근거" value="역할·업무·완료 체크" tone="blue" />
+            <ProfessorSignal label="주의 필요" value={`${urgentProjects}개 프로젝트`} tone={urgentProjects ? 'red' : 'green'} />
+            <ProfessorSignal label="리포트 기준" value="브라우저 저장 데이터" tone="yellow" />
+          </div>
+
+          <div className="mt-8 grid gap-5">
+            {summaries.length ? (
+              summaries.map((summary) => (
+                <ProfessorProjectCard key={summary.project.id} summary={summary} onOpenProject={onOpenProject} />
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-8 text-center">
+                <h2 className="text-xl font-semibold text-[var(--color-text-main)]">아직 확인할 프로젝트가 없습니다</h2>
+                <p className="mt-2 text-sm text-[var(--color-text-secondary)]">학생 프로젝트가 생성되면 이곳에 리포트가 표시됩니다.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ProfessorSignal({ label, value, tone }) {
+  const tones = {
+    blue: 'bg-[var(--color-light-blue)]',
+    green: 'bg-[var(--color-light-green)]',
+    yellow: 'bg-[var(--color-light-yellow)]',
+    red: 'bg-[var(--color-light-red)]',
+  }
+
+  return (
+    <div className={`${tones[tone]} rounded-xl border border-[var(--color-secondary-light)] p-4`}>
+      <p className="text-xs font-semibold text-[var(--color-gray)]">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-[var(--color-text-main)]">{value}</p>
+    </div>
+  )
+}
+
+function ProfessorProjectCard({ summary, onOpenProject }) {
+  const { project, roles, roleSummaries, milestones, completion, completedCount, checkpointCount, statusCounts, warnings, direction } = summary
+
+  return (
+    <article className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-5">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+        <div>
+          <p className="text-sm font-semibold text-[var(--color-primary)]">{project.input.course}</p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[var(--color-text-main)]">{project.input.title}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--color-text-secondary)]">
+            {direction?.one_line || '아직 AI 분배 결과가 없어 프로젝트 방향성이 생성되지 않았습니다.'}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <DashboardStatusPill done={summary.aiCompleted} />
+          <SecondaryButton onClick={() => onOpenProject(project.id)}>프로젝트 열기</SecondaryButton>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-[var(--color-gray)]">전체 진행률</p>
+              <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-[var(--color-text-main)]">{completion}%</p>
+            </div>
+            <p className="text-sm font-semibold text-[var(--color-text-secondary)]">{completedCount}/{checkpointCount || 0} 완료</p>
+          </div>
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-[var(--color-bg-light)]">
+            <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${completion}%` }} />
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <MiniStat label="완료" value={`${statusCounts.done}개`} />
+            <MiniStat label="진행 중" value={`${statusCounts.active}개`} />
+            <MiniStat label="예정" value={`${statusCounts.pending}개`} />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
+          <p className="text-xs font-semibold text-[var(--color-gray)]">팀원별 진행 현황</p>
+          <div className="mt-3 grid gap-3">
+            {(roles.length ? roleSummaries : []).map(({ role, progress, urgent, nearestLabel }) => (
+              <div key={role.member} className="grid gap-1.5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-[var(--color-text-main)]">{role.member} · {role.role_title}</p>
+                  <span className={`text-xs font-semibold ${urgent ? 'text-red-600' : 'text-[var(--color-gray)]'}`}>
+                    {urgent ? '마감임박' : `${progress}%`}
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-[var(--color-bg-light)]">
+                  <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="text-xs text-[var(--color-gray)]">{nearestLabel}</p>
+              </div>
+            ))}
+            {!roles.length && <p className="text-sm text-[var(--color-text-secondary)]">아직 역할 분배 결과가 없습니다.</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
+          <p className="text-xs font-semibold text-[var(--color-gray)]">마일스톤 요약</p>
+          <div className="mt-3 grid gap-2">
+            {milestones.map((milestone) => (
+              <div key={`${project.id}-${milestone.phase}`} className="flex items-center justify-between gap-3 rounded-lg bg-[var(--color-bg-light)] px-3 py-2">
+                <span className="text-sm font-semibold text-[var(--color-text-main)]">{milestone.phase}</span>
+                <span className="text-xs font-semibold text-[var(--color-primary)]">{milestone.status || '예정'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
+          <p className="text-xs font-semibold text-[var(--color-gray)]">AI 리스크 메모</p>
+          <ul className="mt-3 grid gap-2">
+            {(warnings.length ? warnings : ['현재 기록된 주요 리스크가 없습니다.']).map((warning) => (
+              <li key={warning} className="rounded-lg bg-[var(--color-light-yellow)] px-3 py-2 text-sm leading-6 text-[var(--color-dark-gray)]">
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function buildProfessorProjectSummary(project) {
+  const roles = project.gemini?.roles || []
+  const milestones = project.gemini?.milestones || []
+  const totals = milestones.reduce(
+    (acc, milestone) => {
+      const checkpoints = getMilestoneCheckpoints(milestone)
+      acc.checkpointCount += checkpoints.length
+      acc.completedCount += checkpoints.filter((_, index) => milestone.completedCheckpoints?.[index]).length
+      if (milestone.status === '완료') acc.statusCounts.done += 1
+      else if (milestone.status === '진행 중') acc.statusCounts.active += 1
+      else acc.statusCounts.pending += 1
+      return acc
+    },
+    { checkpointCount: 0, completedCount: 0, statusCounts: { done: 0, active: 0, pending: 0 } },
+  )
+  const roleSummaries = roles.map((role, index) => ({
+    role,
+    ...getRoleProgressSummary(role, index, roles, milestones),
+  }))
+  const completion = totals.checkpointCount ? Math.round((totals.completedCount / totals.checkpointCount) * 100) : 0
+
+  return {
+    project,
+    roles,
+    roleSummaries,
+    milestones,
+    completion,
+    completedCount: totals.completedCount,
+    checkpointCount: totals.checkpointCount,
+    statusCounts: totals.statusCounts,
+    warnings: project.gemini?.warnings || [],
+    direction: project.gemini?.direction || null,
+    aiCompleted: Boolean(project.gemini),
+    hasUrgentRole: roleSummaries.some((summary) => summary.urgent),
+  }
+}
+
 function ProjectCreate({ form, setForm, handleFiles, isReadingFiles, canCreate, error, onCreate }) {
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }))
 
@@ -509,8 +680,8 @@ function ProjectCreate({ form, setForm, handleFiles, isReadingFiles, canCreate, 
         <div className="mt-8 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
           <Panel title="과제 정보">
             <div className="grid gap-4">
-              <TextInput label="프로젝트명" value={form.title} onChange={(value) => updateForm('title', value)} placeholder="예: 회계원리 가치투자 분석 과제" />
-              <TextInput label="강의명" value={form.course} onChange={(value) => updateForm('course', value)} placeholder="예: 회계원리" />
+              <TextInput label="프로젝트명" value={form.title} onChange={(value) => updateForm('title', value)} placeholder="예: 청년 주거지원 정책 효과 분석" />
+              <TextInput label="강의명" value={form.course} onChange={(value) => updateForm('course', value)} placeholder="예: 정책분석론" />
               <DeadlineSelect value={form.deadline} onChange={(value) => updateForm('deadline', value)} />
               <label className="block">
                 <span className="text-sm font-semibold text-[var(--color-dark-gray)]">팀원 수</span>
