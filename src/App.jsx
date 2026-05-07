@@ -261,7 +261,7 @@ function Landing({ onStart, onDashboard, projectCount }) {
               팀플을 관리하는 AI 팀메이트, Gemmate
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-8 text-[var(--color-text-secondary)]">
-              Gemmate는 대학 팀 프로젝트에서 반복되는 무임승차, 역할 불균형, 회의 후 정리 누락을 줄이기 위한 협업 시스템입니다.
+              Gemmate는 대학 팀 프로젝트에서 반복되는 무임승차 및 역할 불균형 개선, 일정 관리, 회의록 작성 등 잡무를 덜어주기 위한 협업 시스템입니다.
               과제 기준과 팀원의 역량을 Gemini가 함께 읽고, 실행 가능한 역할 분배와 마감 기반 계획으로 바꿉니다.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -362,7 +362,7 @@ function HeroPreview() {
               <GeminiMark className="h-9 w-9 shrink-0" />
             </div>
             <div className="mt-4 grid gap-2">
-              {['회의록 자동 작성', '역할 자동 분배', '마감 기반 마일스톤'].map((item, index) => (
+              {['Google 워크스테이션 연동', '역할 자동 분배', '마감 기반 마일스톤'].map((item, index) => (
                 <div key={item} className="flex items-center gap-3 rounded-xl bg-[var(--color-bg-light)] px-3 py-2">
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--color-primary)] text-[11px] font-semibold text-white">{index + 1}</span>
                   <span className="text-sm font-semibold text-[var(--color-text-secondary)]">{item}</span>
