@@ -4,6 +4,9 @@ import { CalendarMilestones, MeetingMinutesBoard, InsightPopover } from './compo
 import { skillKeywords } from './data/demoData.js'
 import { callGemini, hasGeminiApiKey } from './services/gemini.js'
 import { STORAGE_KEY, makeId, createEmptyForm, createEmptyProfile, parseHashRoute, toHash, getRoleProgressSummary, loadProjects, normalizeTasks } from './utils/project.js'
+import googleCalendarIcon from './assets/google-calendar.png'
+import googleDocsIcon from './assets/google-docs.png'
+import googleDriveIcon from './assets/google-drive.png'
 import googleMeetIcon from './assets/google-meet.png'
 
 function App() {
@@ -194,43 +197,221 @@ function Header({ navigate }) {
 }
 
 function Landing({ onStart, onDashboard, projectCount }) {
+  const problemCards = [
+    {
+      title: '무임승차를 줄이는 투명한 기준',
+      text: '역할, 마감, 완료 체크를 한 화면에 남겨 팀원이 어떤 업무를 맡았고 어디까지 진행했는지 확인할 수 있습니다.',
+    },
+    {
+      title: '감정 소모보다 학습 몰입',
+      text: '회의 후 할 일, 방향성, 마일스톤을 AI가 정리해 팀원들은 자료 조사와 분석 같은 핵심 학습에 집중합니다.',
+    },
+    {
+      title: '갈등 전에 먼저 정리되는 협업',
+      text: '역할이 모호하거나 일정이 밀릴 때 Gemini가 기준을 제안하고, 팀은 같은 계획표를 보며 조율합니다.',
+    },
+  ]
+  const featureCards = [
+    {
+      label: '01',
+      title: '프로젝트 맥락 입력',
+      icon: googleDriveIcon,
+      text: '공지사항, 평가기준, 제출 형식, 마감일을 입력하면 과제의 핵심 목표와 주의할 기준을 먼저 정리합니다.',
+    },
+    {
+      label: '02',
+      title: '역량 기반 역할 분배',
+      icon: googleDocsIcon,
+      text: '본인이 선택한 역량 키워드와 팀원 수를 바탕으로 자료조사, 분석, 스토리보드, 발표, 검수 역할을 나눕니다.',
+    },
+    {
+      label: '03',
+      title: '마일스톤 달력',
+      icon: googleCalendarIcon,
+      text: '최종 마감일부터 역산해 단계별 완료일을 만들고, 각 업무의 담당자와 완료 상태를 달력에서 관리합니다.',
+    },
+    {
+      label: '04',
+      title: '회의 기록과 후속 조치',
+      icon: googleMeetIcon,
+      text: '회의록 예시처럼 논의 주제, 의사결정, 다음 회의 전 완료할 일을 정리해 프로젝트 방향이 흩어지지 않게 합니다.',
+    },
+  ]
+
   return (
     <>
-      <section className="border-b border-[var(--color-secondary-light)]">
-        <div className="mx-auto grid min-h-[calc(100vh-64px)] max-w-6xl gap-10 px-5 py-20 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+      <section className="relative isolate overflow-hidden border-b border-[var(--color-secondary-light)] bg-[var(--color-bg-white)]">
+        <div
+          className="absolute inset-0 -z-10"
+          style={{
+            background:
+              'linear-gradient(135deg, rgba(215,227,255,0.9) 0%, rgba(255,255,255,0.96) 35%, rgba(235,226,255,0.72) 70%, rgba(255,255,255,0.98) 100%)',
+          }}
+        />
+        <div className="mx-auto grid min-h-[calc(100vh-64px)] max-w-6xl gap-10 px-5 py-16 lg:grid-cols-[1fr_0.92fr] lg:items-center lg:py-20">
           <div>
-            <Pill>Yonsei Social Sciences</Pill>
-            <h1 className="mt-6 max-w-3xl text-5xl font-normal leading-[1.08] tracking-[-0.04em] text-[var(--color-text-main)] sm:text-6xl">
-              팀 프로젝트를 데이터로 정리하고 Gemini로 역할을 나눕니다.
+            <div className="inline-flex items-center gap-2 rounded-full border border-[rgba(0,56,118,0.18)] bg-white/70 px-3 py-1 text-xs font-semibold text-[var(--color-primary)] shadow-sm backdrop-blur">
+              <GeminiMark className="h-4 w-4" />
+              Yonsei Social Sciences x Gemini
+            </div>
+            <h1 className="mt-7 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-[-0.05em] text-[var(--color-text-main)] sm:text-6xl lg:text-7xl">
+              팀플을 관리하는 AI 팀메이트, Gemmate
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-8 text-[var(--color-text-secondary)]">
-              Gemmate는 프로젝트 정보와 본인의 역량을 바탕으로 역할 분배, 마일스톤, 회의 후 할 일을 생성합니다.
-              결과는 현재 브라우저의 localStorage에 저장됩니다.
+              Gemmate는 대학 팀 프로젝트에서 반복되는 무임승차, 역할 불균형, 회의 후 정리 누락을 줄이기 위한 협업 시스템입니다.
+              과제 기준과 팀원의 역량을 Gemini가 함께 읽고, 실행 가능한 역할 분배와 마감 기반 계획으로 바꿉니다.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-7 flex flex-wrap items-center gap-3">
               <PrimaryButton onClick={onStart}>프로젝트 만들기</PrimaryButton>
               <SecondaryButton onClick={onDashboard}>저장된 프로젝트 {projectCount > 0 ? `(${projectCount})` : ''}</SecondaryButton>
             </div>
+            <div className="mt-9 grid max-w-2xl gap-3 sm:grid-cols-3">
+              <LandingMetric value="8" label="핵심 협업 기능" />
+              <LandingMetric value="AI" label="역량 기반 분배" />
+              <LandingMetric value="Connect" label="Google 워크스페이스 연동" />
+            </div>
           </div>
-          <AgentPanel />
+          <HeroPreview />
+        </div>
+      </section>
+
+      <section className="bg-[var(--color-bg-navy)] px-5 py-14 text-white">
+        <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-3">
+          {problemCards.map((card, index) => (
+            <article key={card.title} className="rounded-xl border border-white/15 bg-white/[0.06] p-5 backdrop-blur">
+              <span className="text-xs font-semibold text-[#8AB4F8]">Pain Point 0{index + 1}</span>
+              <h2 className="mt-4 text-xl font-semibold text-white">{card.title}</h2>
+              <p className="mt-3 text-sm leading-6 text-white/72">{card.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-b border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] px-5 py-16">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+            <div>
+              <PageHead
+                eyebrow="How It Works"
+                title="Gemini가 팀장처럼 읽고, 나누고, 점검합니다"
+                description="강의계획서, 평가기준, 팀원 역량, 회의 내용을 하나의 프로젝트 맥락으로 연결해 역할과 일정이 따로 놀지 않게 만드는 흐름입니다."
+              />
+            </div>
+            <div className="grid gap-3">
+              {featureCards.map((card) => (
+                <LandingFeatureStep key={card.label} card={card} />
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
       <section className="px-5 py-16">
-        <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-3">
-          <InfoCard title="1. 최소 정보로 생성" text="프로젝트 생성 시에는 팀원 수와 과제 정보만 입력합니다." />
-          <InfoCard title="2. 내 역량은 상세에서" text="프로젝트에 들어가서 본인의 역량 정보가 없을 때 한 번만 입력합니다." />
-          <InfoCard title="3. AI로 분배" text="내 정보를 기준으로 나머지 팀원 역량은 Gemini가 합리적으로 가정합니다." />
+        <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+          <PageHead
+            eyebrow="Prototype"
+            title="실제 사용 흐름은 가볍게, 결과는 프로젝트처럼"
+            description="프로젝트 생성 시에는 팀원 수와 과제 정보만 입력하고, 상세 페이지에서 본인의 역량을 한 번만 입력합니다. 이후 AI 분배 결과는 대시보드에서 확인할 수 있습니다."
+          />
+          <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4 shadow-[0_20px_60px_rgba(0,35,78,0.08)]">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <InfoCard title="1. 최소 정보로 생성" text="프로젝트 생성 시에는 팀원 수와 과제 정보만 입력합니다." />
+              <InfoCard title="2. 내 역량은 상세에서" text="프로젝트에 들어가서 본인의 역량 정보가 없을 때 한 번만 입력합니다." />
+              <InfoCard title="3. AI로 분배" text="내 정보를 기준으로 나머지 팀원 역량은 Gemini가 합리적으로 가정합니다." />
+            </div>
+          </div>
         </div>
       </section>
     </>
   )
 }
 
+function GeminiMark({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+      <path fill="#4285F4" d="M16 2.5c1.5 6.5 4 9 10.5 10.5C20 14.5 17.5 17 16 23.5 14.5 17 12 14.5 5.5 13 12 11.5 14.5 9 16 2.5Z" />
+      <path fill="#EA4335" d="M22.5 4.5c.6 2.4 1.6 3.4 4 4-2.4.6-3.4 1.6-4 4-.6-2.4-1.6-3.4-4-4 2.4-.6 3.4-1.6 4-4Z" />
+      <path fill="#34A853" d="M10.5 20c.8 3.2 2 4.5 5.2 5.2-3.2.8-4.5 2-5.2 5.2-.8-3.2-2-4.5-5.2-5.2 3.2-.7 4.5-2 5.2-5.2Z" />
+      <path fill="#FBBC05" d="M24.8 21.5c.5 1.8 1.2 2.5 3 3-1.8.5-2.5 1.2-3 3-.5-1.8-1.2-2.5-3-3 1.8-.5 2.5-1.2 3-3Z" />
+    </svg>
+  )
+}
+
+function LandingMetric({ value, label }) {
+  return (
+    <div className="rounded-xl border border-white/60 bg-white/55 px-4 py-3 shadow-sm backdrop-blur">
+      <p className="text-2xl font-semibold tracking-[-0.03em] text-[var(--color-text-main)]">{value}</p>
+      <p className="mt-1 text-xs font-semibold text-[var(--color-secondary)]">{label}</p>
+    </div>
+  )
+}
+
+function HeroPreview() {
+  return (
+    <div className="relative">
+      <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-white/45 blur-2xl" />
+      <div className="rounded-[1.75rem] border border-white/70 bg-white/70 p-4 shadow-[0_28px_80px_rgba(0,35,78,0.16)] backdrop-blur">
+        <div className="flex items-center justify-between border-b border-[rgba(0,56,118,0.12)] pb-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">Gemmate Console</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[var(--color-text-main)]">더 나은 퀄리티를 위한 AI</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {[googleDocsIcon, googleDriveIcon, googleCalendarIcon, googleMeetIcon].map((icon) => (
+              <span key={icon} className="grid h-9 w-9 place-items-center rounded-xl bg-white shadow-sm">
+                <img src={icon} alt="" className="h-5 w-5 object-contain" />
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-4 pt-4">
+          <div className="rounded-2xl border border-[rgba(0,56,118,0.12)] bg-[var(--color-bg-white)] p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold text-[var(--color-secondary)]">Direction</p>
+                <p className="mt-2 text-lg font-semibold leading-6 tracking-[-0.03em] text-[var(--color-text-main)]">
+                  평가기준과 역할을 연결해 실행 가능한 계획으로 전환
+                </p>
+              </div>
+              <GeminiMark className="h-9 w-9 shrink-0" />
+            </div>
+            <div className="mt-4 grid gap-2">
+              {['재무 근거 수집', '역할 자동 분배', '마감 기반 마일스톤'].map((item, index) => (
+                <div key={item} className="flex items-center gap-3 rounded-xl bg-[var(--color-bg-light)] px-3 py-2">
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--color-primary)] text-[11px] font-semibold text-white">{index + 1}</span>
+                  <span className="text-sm font-semibold text-[var(--color-text-secondary)]">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <AgentPanel />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LandingFeatureStep({ card }) {
+  return (
+    <article className="group grid gap-4 rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(0,35,78,0.09)] sm:grid-cols-[72px_1fr]">
+      <div className="flex items-center gap-3 sm:block">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--color-bg-light)]">
+          <img src={card.icon} alt="" className="h-7 w-7 object-contain" />
+        </div>
+        <span className="text-xs font-semibold text-[var(--color-primary)] sm:mt-4 sm:block">{card.label}</span>
+      </div>
+      <div>
+        <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--color-text-main)]">{card.title}</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">{card.text}</p>
+      </div>
+    </article>
+  )
+}
+
 function AgentPanel() {
   return (
-    <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)]">
-      <div className="border-b border-[var(--color-secondary-light)] px-5 py-4">
+    <div className="rounded-2xl border border-[rgba(0,56,118,0.12)] bg-[var(--color-bg-white)]">
+      <div className="border-b border-[rgba(0,56,118,0.12)] px-5 py-4">
         <p className="text-sm font-semibold text-[var(--color-primary)]">Gemmate agent timeline</p>
       </div>
       <div className="grid gap-3 p-5">

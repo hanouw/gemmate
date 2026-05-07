@@ -331,7 +331,10 @@ export function loadProjects() {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (!saved) return [createStarterProject()]
     const parsed = JSON.parse(saved)
-    return Array.isArray(parsed) && parsed.length ? parsed : [createStarterProject()]
+    if (!Array.isArray(parsed) || !parsed.length) return [createStarterProject()]
+
+    const starterProject = createStarterProject()
+    return parsed.map((project) => (project?.id === 'starter_value_investing_2026' ? starterProject : project))
   } catch {
     return [createStarterProject()]
   }
