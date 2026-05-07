@@ -255,14 +255,14 @@ export function MeetingMinutesBoard({ embedded = false }) {
             key={meeting.date}
             type="button"
             onClick={() => setActiveMeeting(meeting)}
-            className="grid w-full grid-cols-[24px_1fr_auto] items-center gap-3 border-b border-[var(--color-secondary-light)] px-3 py-2.5 text-left last:border-b-0 hover:bg-[var(--color-bg-light)]"
+            className="grid w-full grid-cols-[24px_1fr] items-start gap-x-3 gap-y-1 border-b border-[var(--color-secondary-light)] px-3 py-2.5 text-left last:border-b-0 hover:bg-[var(--color-bg-light)] sm:grid-cols-[24px_1fr_auto] sm:items-center"
           >
-            <img src={googleDocsIcon} alt="" className="h-5 w-5 object-contain" />
+            <img src={googleDocsIcon} alt="" className="mt-0.5 h-5 w-5 object-contain sm:mt-0" />
             <span className="min-w-0">
               <span className="block text-sm font-medium text-[var(--color-text-main)]">{meeting.title}</span>
               <span className="mt-0.5 block text-xs leading-5 text-[var(--color-gray)]">{meeting.summary}</span>
             </span>
-            <span className="text-xs font-medium text-[var(--color-gray)]">{meeting.date}</span>
+            <span className="col-start-2 text-xs font-medium text-[var(--color-gray)] sm:col-start-auto">{meeting.date}</span>
           </button>
         ))}
       </div>

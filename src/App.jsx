@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, PageHead, TimelineRow, MiniStat, ReadOnlyBlock, InfoCard, Panel, TextInput, TextArea, Pill, PrimaryButton, SecondaryButton, DangerButton, ErrorBox, DeadlineSelect } from './components/ui.jsx'
+import { Modal, PageHead, TimelineRow, MiniStat, ReadOnlyBlock, Panel, TextInput, TextArea, Pill, PrimaryButton, SecondaryButton, DangerButton, ErrorBox, DeadlineSelect } from './components/ui.jsx'
 import { CalendarMilestones, MeetingMinutesBoard, InsightPopover } from './components/projectSections.jsx'
-import { skillKeywords } from './data/demoData.js'
+import { skillKeywords, sampleMeetings } from './data/demoData.js'
 import { callGemini, hasGeminiApiKey } from './services/gemini.js'
-import { STORAGE_KEY, makeId, createEmptyForm, createEmptyProfile, parseHashRoute, toHash, getRoleProgressSummary, getMilestoneCheckpoints, loadProjects, normalizeTasks } from './utils/project.js'
+import { STORAGE_KEY, makeId, createEmptyForm, createEmptyProfile, parseHashRoute, toHash, getRoleProgressSummary, getMilestoneCheckpoints, getCheckpointOwner, loadProjects, normalizeTasks } from './utils/project.js'
 import googleCalendarIcon from './assets/google-calendar.png'
 import googleDocsIcon from './assets/google-docs.png'
 import googleDriveIcon from './assets/google-drive.png'
@@ -151,7 +151,7 @@ function App() {
 
   return (
     <main className="min-h-screen bg-[var(--color-bg-light)] text-[var(--color-black)]">
-      <Header navigate={navigate} />
+      <Header navigate={navigate} screen={screen} />
       {screen === 'landing' && <Landing onStart={resetForm} onDashboard={() => navigate('dashboard')} projectCount={projects.length} />}
       {screen === 'dashboard' && <Dashboard projects={projects} onCreate={resetForm} onOpen={openProject} onDelete={deleteProject} />}
       {screen === 'professor' && <ProfessorReport projects={projects} onOpenProject={openProject} />}
@@ -181,7 +181,9 @@ function App() {
   )
 }
 
-function Header({ navigate }) {
+function Header({ navigate, screen }) {
+  const isProfessor = screen === 'professor'
+
   return (
     <header className="border-b border-[var(--color-secondary-light)] bg-[var(--color-bg-light)]">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
@@ -189,7 +191,9 @@ function Header({ navigate }) {
           <span className="block text-lg font-semibold tracking-[-0.02em] text-[var(--color-primary)]">Gemmate</span>
           <span className="block text-xs text-[var(--color-secondary)]">Yonsei x Gemini</span>
         </button>
-        <SecondaryButton onClick={() => navigate('professor')}>교수님 페이지로 전환</SecondaryButton>
+        <SecondaryButton onClick={() => navigate(isProfessor ? 'dashboard' : 'professor')}>
+          {isProfessor ? '학생페이지로 전환' : '교수님 페이지로 전환'}
+        </SecondaryButton>
       </div>
     </header>
   )
@@ -479,7 +483,6 @@ function DashboardStatusPill({ done }) {
 
 function ProfessorReport({ projects = [], onOpenProject }) {
   const summaries = projects.map(buildProfessorProjectSummary)
-  const aiCompleted = summaries.filter((summary) => summary.aiCompleted).length
   const averageProgress = summaries.length
     ? Math.round(summaries.reduce((sum, summary) => sum + summary.completion, 0) / summaries.length)
     : 0
@@ -497,15 +500,15 @@ function ProfessorReport({ projects = [], onOpenProject }) {
             />
             <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[390px]">
               <MiniStat label="관리 프로젝트" value={`${summaries.length}개`} />
-              <MiniStat label="AI 분배 완료" value={`${aiCompleted}개`} />
               <MiniStat label="평균 진행률" value={`${averageProgress}%`} />
+              <MiniStat label="주의 필요" value={`${urgentProjects}개`} />
             </div>
           </div>
 
           <div className="mt-6 grid gap-3 md:grid-cols-3">
             <ProfessorSignal label="평가 근거" value="역할·업무·완료 체크" tone="blue" />
             <ProfessorSignal label="주의 필요" value={`${urgentProjects}개 프로젝트`} tone={urgentProjects ? 'red' : 'green'} />
-            <ProfessorSignal label="리포트 기준" value="브라우저 저장 데이터" tone="yellow" />
+            <ProfessorSignal label="리포트 기준" value="학생 저장 데이터" tone="yellow" />
           </div>
 
           <div className="mt-8 grid gap-5">
@@ -543,7 +546,8 @@ function ProfessorSignal({ label, value, tone }) {
 }
 
 function ProfessorProjectCard({ summary, onOpenProject }) {
-  const { project, roles, roleSummaries, milestones, completion, completedCount, checkpointCount, statusCounts, warnings, direction } = summary
+  const [showAiSummary, setShowAiSummary] = useState(false)
+  const { project, completion, completedCount, checkpointCount, statusCounts, direction } = summary
 
   return (
     <article className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-5">
@@ -556,76 +560,84 @@ function ProfessorProjectCard({ summary, onOpenProject }) {
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <DashboardStatusPill done={summary.aiCompleted} />
+          <PrimaryButton onClick={() => setShowAiSummary(true)}>AI 요약</PrimaryButton>
           <SecondaryButton onClick={() => onOpenProject(project.id)}>프로젝트 열기</SecondaryButton>
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold text-[var(--color-gray)]">전체 진행률</p>
-              <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-[var(--color-text-main)]">{completion}%</p>
-            </div>
-            <p className="text-sm font-semibold text-[var(--color-text-secondary)]">{completedCount}/{checkpointCount || 0} 완료</p>
+      <div className="mt-5 rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-[var(--color-gray)]">전체 진행률</p>
+            <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-[var(--color-text-main)]">{completion}%</p>
           </div>
-          <div className="mt-4 h-3 overflow-hidden rounded-full bg-[var(--color-bg-light)]">
-            <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${completion}%` }} />
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <MiniStat label="완료" value={`${statusCounts.done}개`} />
-            <MiniStat label="진행 중" value={`${statusCounts.active}개`} />
-            <MiniStat label="예정" value={`${statusCounts.pending}개`} />
-          </div>
+          <p className="text-sm font-semibold text-[var(--color-text-secondary)]">{completedCount}/{checkpointCount || 0} 완료</p>
         </div>
+        <div className="mt-4 h-3 overflow-hidden rounded-full bg-[var(--color-bg-light)]">
+          <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${completion}%` }} />
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <MiniStat label="완료" value={`${statusCounts.done}개`} />
+          <MiniStat label="진행 중" value={`${statusCounts.active}개`} />
+          <MiniStat label="예정" value={`${statusCounts.pending}개`} />
+        </div>
+      </div>
 
-        <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
-          <p className="text-xs font-semibold text-[var(--color-gray)]">팀원별 진행 현황</p>
+      {showAiSummary && <ProfessorAiSummaryModal summary={summary} onClose={() => setShowAiSummary(false)} />}
+    </article>
+  )
+}
+
+function ProfessorAiSummaryModal({ summary, onClose }) {
+  const { project, roles, roleContributions, milestones } = summary
+  const meetings = sampleMeetings.slice(0, 3)
+  const completedMilestones = milestones.filter((milestone) => milestone.status === '완료').length
+  const activeMilestones = milestones.filter((milestone) => milestone.status === '진행 중').length
+
+  return (
+    <Modal title={`${project.input.title} AI 요약`} onClose={onClose}>
+      <div className="grid gap-5">
+        <ReadOnlyBlock
+          title="종합 요약"
+          text={`이 프로젝트는 ${project.input.course} 과제로, 현재 마일스톤 ${milestones.length}개 중 완료 ${completedMilestones}개, 진행 중 ${activeMilestones}개 상태입니다. 회의록과 업무 배정 기록을 기준으로 보면 팀원별 역할이 비교적 명확하게 나뉘어 있으며, 교수자는 진행률과 역할 수행 흔적을 평가 참고자료로 확인할 수 있습니다.`}
+        />
+
+        <section className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+          <h3 className="text-base font-semibold text-[var(--color-text-main)]">역할 및 맡은 비율</h3>
           <div className="mt-3 grid gap-3">
-            {(roles.length ? roleSummaries : []).map(({ role, progress, urgent, nearestLabel }) => (
-              <div key={role.member} className="grid gap-1.5">
+            {(roles.length ? roleContributions : []).map(({ role, ratio, assignedTasks }) => (
+              <div key={role.member} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-[var(--color-text-main)]">{role.member} · {role.role_title}</p>
-                  <span className={`text-xs font-semibold ${urgent ? 'text-red-600' : 'text-[var(--color-gray)]'}`}>
-                    {urgent ? '마감임박' : `${progress}%`}
-                  </span>
+                  <span className="text-sm font-semibold text-[var(--color-primary)]">{ratio}%</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-[var(--color-bg-light)]">
-                  <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${progress}%` }} />
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--color-bg-light)]">
+                  <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${ratio}%` }} />
                 </div>
-                <p className="text-xs text-[var(--color-gray)]">{nearestLabel}</p>
+                <ul className="mt-3 grid gap-1.5">
+                  {(assignedTasks.length ? assignedTasks : role.responsibilities || []).slice(0, 4).map((task) => (
+                    <li key={task} className="text-sm leading-6 text-[var(--color-text-secondary)]">{task}</li>
+                  ))}
+                </ul>
               </div>
             ))}
-            {!roles.length && <p className="text-sm text-[var(--color-text-secondary)]">아직 역할 분배 결과가 없습니다.</p>}
+            {!roles.length && <p className="text-sm text-[var(--color-text-secondary)]">아직 역할 분배 데이터가 없습니다.</p>}
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
-          <p className="text-xs font-semibold text-[var(--color-gray)]">마일스톤 요약</p>
+        <section className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
+          <h3 className="text-base font-semibold text-[var(--color-text-main)]">회의 기반 수행 흔적</h3>
           <div className="mt-3 grid gap-2">
-            {milestones.map((milestone) => (
-              <div key={`${project.id}-${milestone.phase}`} className="flex items-center justify-between gap-3 rounded-lg bg-[var(--color-bg-light)] px-3 py-2">
-                <span className="text-sm font-semibold text-[var(--color-text-main)]">{milestone.phase}</span>
-                <span className="text-xs font-semibold text-[var(--color-primary)]">{milestone.status || '예정'}</span>
+            {meetings.map((meeting) => (
+              <div key={meeting.date} className="rounded-lg bg-[var(--color-bg-light)] px-3 py-2">
+                <p className="text-sm font-semibold text-[var(--color-text-main)]">{meeting.date} · {meeting.title}</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">{meeting.summary}</p>
               </div>
             ))}
           </div>
-        </div>
-        <div className="rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
-          <p className="text-xs font-semibold text-[var(--color-gray)]">AI 리스크 메모</p>
-          <ul className="mt-3 grid gap-2">
-            {(warnings.length ? warnings : ['현재 기록된 주요 리스크가 없습니다.']).map((warning) => (
-              <li key={warning} className="rounded-lg bg-[var(--color-light-yellow)] px-3 py-2 text-sm leading-6 text-[var(--color-dark-gray)]">
-                {warning}
-              </li>
-            ))}
-          </ul>
-        </div>
+        </section>
       </div>
-    </article>
+    </Modal>
   )
 }
 
@@ -648,12 +660,37 @@ function buildProfessorProjectSummary(project) {
     role,
     ...getRoleProgressSummary(role, index, roles, milestones),
   }))
+  const assignedTasksByRole = roles.map((role) => {
+    const assignedTasks = milestones.flatMap((milestone) =>
+      getMilestoneCheckpoints(milestone)
+        .map((checkpoint, index) => ({
+          task: typeof checkpoint === 'string' ? checkpoint : checkpoint.task,
+          owner: getCheckpointOwner(milestone, index, roles),
+        }))
+        .filter(({ owner }) => owner === role.member)
+        .map(({ task }) => task)
+        .filter(Boolean),
+    )
+
+    return { role, assignedTasks }
+  })
+  const totalAssignedTasks = assignedTasksByRole.reduce((sum, item) => sum + item.assignedTasks.length, 0)
+  const roleContributions = assignedTasksByRole.map(({ role, assignedTasks }) => ({
+    role,
+    assignedTasks,
+    ratio: totalAssignedTasks
+      ? Math.round((assignedTasks.length / totalAssignedTasks) * 100)
+      : roles.length
+        ? Math.round(100 / roles.length)
+        : 0,
+  }))
   const completion = totals.checkpointCount ? Math.round((totals.completedCount / totals.checkpointCount) * 100) : 0
 
   return {
     project,
     roles,
     roleSummaries,
+    roleContributions,
     milestones,
     completion,
     completedCount: totals.completedCount,
