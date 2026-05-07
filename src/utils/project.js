@@ -189,10 +189,17 @@ export function getPhaseDisplayLabel(phase = '') {
   const number = getPhaseNumber(phase)
   const [, detail = ''] = rawPhase.split(/phase\s*\d+\s*:?\s*/i)
   const phaseDetail = detail.split(':')[0]?.trim()
-  if (number) return phaseDetail ? `Phase ${number}:\n${phaseDetail}` : `Phase ${number}`
+  const compactDetail = truncatePhaseDetail(phaseDetail)
+  if (number) return compactDetail ? `Phase ${number}:\n${compactDetail}` : `Phase ${number}`
 
   const [label = 'Phase', next = ''] = rawPhase.split(':').map((part) => part.trim())
-  return next ? `${label}:\n${next}` : label
+  const compactNext = truncatePhaseDetail(next)
+  return compactNext ? `${label}:\n${compactNext}` : label
+}
+
+function truncatePhaseDetail(value = '') {
+  const normalized = String(value).trim()
+  return normalized.length > 6 ? `${normalized.slice(0, 6)}...` : normalized
 }
 
 export function getPhaseMobileLabel(phase = '') {
