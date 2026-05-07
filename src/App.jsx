@@ -560,7 +560,7 @@ function ProfessorProjectCard({ summary, onOpenProject }) {
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <PrimaryButton onClick={() => setShowAiSummary(true)}>AI 요약</PrimaryButton>
+          <PrimaryButton onClick={() => setShowAiSummary(true)}>데이터 요약</PrimaryButton>
           <SecondaryButton onClick={() => onOpenProject(project.id)}>프로젝트 열기</SecondaryButton>
         </div>
       </div>

@@ -285,8 +285,8 @@ export function MeetingMinutesBoard({ embedded = false }) {
 
 function MeetingMinutesDetail({ meeting }) {
   return (
-    <div className="grid gap-5">
-      <div className="grid gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4 sm:grid-cols-2">
+    <div className="grid gap-3 sm:gap-5">
+      <div className="grid gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-3 sm:grid-cols-2 sm:p-4">
         <div>
           <p className="text-xs font-semibold text-[var(--color-gray)]">일시</p>
           <p className="mt-1 text-sm font-semibold text-[var(--color-text-main)]">{meeting.date}</p>
@@ -297,13 +297,13 @@ function MeetingMinutesDetail({ meeting }) {
         </div>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-3 sm:gap-4">
         {(meeting.sections || []).map((section) => (
-          <section key={section.title} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
+          <section key={section.title} className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-3 sm:p-4">
             <h4 className="text-base font-bold text-[var(--color-text-main)]">{section.title}</h4>
             <ul className="mt-3 grid gap-2">
               {section.items.map((item) => (
-                <li key={item} className="text-sm leading-7 text-[var(--color-text-secondary)]">
+                <li key={item} className="text-sm leading-6 text-[var(--color-text-secondary)] sm:leading-7">
                   {item}
                 </li>
               ))}
@@ -312,37 +312,37 @@ function MeetingMinutesDetail({ meeting }) {
         ))}
       </div>
 
-      <section className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-4">
+      <section className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] p-3 sm:p-4">
         <h4 className="text-base font-bold text-[var(--color-text-main)]">주요 의사결정 사항</h4>
         <ul className="mt-3 grid gap-2">
           {(meeting.decisions || []).map((item) => (
-            <li key={item} className="text-sm leading-7 text-[var(--color-text-secondary)]">
+            <li key={item} className="text-sm leading-6 text-[var(--color-text-secondary)] sm:leading-7">
               {item}
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-4">
+      <section className="rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-3 sm:p-4">
         <h4 className="text-base font-bold text-[var(--color-text-main)]">추후 일정</h4>
         <ul className="mt-3 grid gap-2">
           {(meeting.nextSchedule || []).map((item) => (
-            <li key={item} className="text-sm leading-7 text-[var(--color-text-secondary)]">
+            <li key={item} className="text-sm leading-6 text-[var(--color-text-secondary)] sm:leading-7">
               {item}
             </li>
           ))}
         </ul>
       </section>
 
-      <div className="flex items-center gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] px-4 py-3">
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--color-bg-white)] text-[var(--color-primary)]">
+      <div className="flex min-w-0 items-center gap-3 rounded-lg border border-[var(--color-secondary-light)] bg-[var(--color-bg-light)] px-3 py-3 sm:px-4">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--color-bg-white)] text-[var(--color-primary)]">
           <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-none stroke-current stroke-2">
             <path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />
           </svg>
         </span>
         <span className="min-w-0">
           <span className="block text-xs font-semibold text-[var(--color-gray)]">녹취록 첨부파일</span>
-          <span className="mt-0.5 block text-sm font-semibold text-[var(--color-text-main)]">{meeting.attachment || 'meeting_transcript.txt'}</span>
+          <span className="mt-0.5 block truncate text-sm font-semibold text-[var(--color-text-main)]">{meeting.attachment || 'meeting_transcript.txt'}</span>
         </span>
       </div>
     </div>

@@ -17,13 +17,13 @@ export function ListItems({ items = [], tone = 'blue' }) {
 
 export function Modal({ title, children, onClose }) {
   return createPortal(
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(0,35,78,0.36)] px-5" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(0,35,78,0.36)] px-2 sm:px-5" onMouseDown={onClose}>
       <div
-        className="max-h-[82vh] w-full max-w-2xl overflow-auto rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-5"
+        className="max-h-[88vh] w-full max-w-2xl overflow-auto rounded-xl border border-[var(--color-secondary-light)] bg-[var(--color-bg-white)] p-3 sm:max-h-[82vh] sm:p-5"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-4 border-b border-[var(--color-secondary-light)] pb-4">
-          <h3 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--color-text-main)]">{title}</h3>
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--color-secondary-light)] pb-3 sm:items-center sm:gap-4 sm:pb-4">
+          <h3 className="min-w-0 text-xl font-semibold leading-7 tracking-[-0.03em] text-[var(--color-text-main)] sm:text-2xl">{title}</h3>
           <button type="button" onClick={onClose} className="rounded-lg border border-[var(--color-secondary-light)] px-3 py-1 text-sm font-semibold text-[var(--color-text-main)]">
             닫기
           </button>
